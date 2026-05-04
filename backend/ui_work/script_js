@@ -1,0 +1,3055 @@
+const UI_I18N = {
+    en: {
+        appTitle: 'DEMAN.SOTRE',
+        loading: 'Loading…',
+        refreshedOnly: '✨ Refreshed only',
+        refreshLabel: 'Refresh',
+        refreshTitle: 'Reload list from server only — instance IDs are unchanged. Use Refresh ID on a row to change an ID.',
+        refreshedOnlyTitle: 'Show only items that have the refreshed badge (Refresh ID this session).',
+        sortBy: 'Sort by:',
+        searchPh: 'Search by name or ID…',
+        loadingInv: 'Loading inventory…',
+        statItems: 'items',
+        statUnits: 'units',
+        statIdentified: 'identified',
+        refreshedPill: 'refreshed (Refresh ID)',
+        clearMarks: 'Clear badges',
+        clearMarksTitle: 'Remove badges from UI (does not revert IDs).',
+        noItems: 'No items found',
+        noRefreshedFilter: 'No items have the refreshed badge. Turn off Refreshed only to see all, or run Refresh ID from the action column.',
+        thSelectAll: 'Select all visible items',
+        thStatusId: 'ID status',
+        thStatusTitle: 'Whether Refresh ID was applied to this instance (saved in browser).',
+        lblRefreshed: 'Refreshed',
+        lblNone: 'None',
+        badgeRefTitle: 'Instance ID changed (Refresh ID) this session.',
+        bulkNoSelect: 'No items selected.\nCheck the boxes on the left of each item first.',
+        bulkConfirmLine: 'Requests are sent in fast batches (/api/change-id-bulk) — faster than one request per item.',
+        msgListUpdated: 'List updated: {n} items.',
+        errFailed: 'failed',
+        errUnexpected: 'Unexpected server response',
+        batchLine: '⚡ Batch {b} — {n} items (bulk server)',
+        modalRefreshed: '<strong>Refreshed</strong> — Refresh ID was used on this instance in this session (current ID is the new one).',
+        msgIdUpdated: 'ID updated: {name}',
+        langSwitchToAr: 'العربية',
+        langSwitchToEn: 'English',
+        langTitleToAr: 'التبديل إلى العربية',
+        langTitleToEn: 'Switch to English',
+    },
+    ar: {
+        appTitle: 'DEMAN.SOTRE',
+        loading: 'جاري التحميل…',
+        refreshedOnly: '✨ محدّث فقط',
+        refreshLabel: 'تحديث',
+        refreshTitle: 'إعادة تحميل القائمة من السيرفر فقط — لا يغيّر معرّفات المثيل. لتغيير المعرف استخدم «Refresh ID» على السطر.',
+        refreshedOnlyTitle: 'إظهار العناصر التي نفّذت عليها Refresh ID فقط (علامة محدّث).',
+        sortBy: 'ترتيب حسب:',
+        searchPh: 'بحث بالاسم أو المعرّف…',
+        loadingInv: 'جاري تحميل المخزون…',
+        statItems: 'عنصر',
+        statUnits: 'وحدة',
+        statIdentified: 'معرّفة',
+        refreshedPill: 'محدّث (Refresh ID)',
+        clearMarks: 'مسح العلامات',
+        clearMarksTitle: 'إزالة الشارات من الواجهة (لا يعيد المعرفات).',
+        noItems: 'لا توجد عناصر',
+        noRefreshedFilter: 'لا يوجد هنا عنصر عليه علامة «محدّث» (Refresh ID). عطّل «محدّث فقط» لرؤية الكل، أو نفّذ Refresh ID من عمود الإجراء.',
+        thSelectAll: 'تحديد كل العناصر الظاهرة',
+        thStatusId: 'حالة ID',
+        thStatusTitle: 'هل تم تنفيذ Refresh ID على هذا المثيل (يُحفظ في المتصفح).',
+        lblRefreshed: 'محدّث',
+        lblNone: 'بدون',
+        badgeRefTitle: 'تم تغيير معرّف المثيل (Refresh ID) في هذه الجلسة.',
+        bulkNoSelect: 'لم يتم تحديد عناصر.\nحدّد المربعات على يسار كل عنصر أولاً.',
+        bulkConfirmLine: 'سيتم الإرسال على دفعات سريعة للسيرفر (مسار /api/change-id-bulk) — أسرع من طلب لكل عنصر.',
+        msgListUpdated: 'تم تحديث القائمة: {n} عنصر.',
+        errFailed: 'فشل',
+        errUnexpected: 'رد غير متوقع من السيرفر',
+        batchLine: '⚡ دفعة {b} — {n} عنصر (سيرفر مجمّع)',
+        modalRefreshed: '<strong>محدّث</strong> — تم استخدام «Refresh ID» على هذا المثيل في هذه الجلسة (المعرّف الحالي هو الجديد)',
+        msgIdUpdated: 'تم تحديث المعرف: {name}',
+        langSwitchToAr: 'العربية',
+        langSwitchToEn: 'English',
+        langTitleToAr: 'التبديل إلى العربية',
+        langTitleToEn: 'Switch to English',
+    },
+};
+
+function getOrCreateDeviceId() {
+    try {
+        let d = localStorage.getItem('cls_device_id') || '';
+        d = String(d || '').trim();
+        if (!d) {
+            d = (Math.random().toString(36).slice(2) + Date.now().toString(36) + Math.random().toString(36).slice(2)).slice(0, 40);
+            localStorage.setItem('cls_device_id', d);
+        }
+        return String(d || '').replace(/[\u0080-\uFFFF]/g, '').replace(/[\r\n]/g, '').trim();
+    } catch (_) {
+        return '';
+    }
+}
+
+class InventoryViewer {
+    constructor() {
+        this.inventoryData = [];
+        this.itemIcons = {};
+        this.itemNames = {};
+        this.itemCategories = {};
+        this.itemBlacklist = new Set();
+        this.isLoading = false;
+        this.selectedIds = new Set();
+        this._oauthRunning = false;
+        this.cloneInstanceIds = new Set();
+        this._backpackFilterFallbackActive = false;
+        this._cachedVisibleForTable = [];
+        this.backpackOnly = false;
+        this._strictBackpackMatchCount = 0;
+        this.containerFilter = 'all'; // 'all' | 'stash' | 'backpack'
+        this.showRefreshedOnly = false;
+        this.showUnindexed = false;
+        this.slotFilter = 'all';
+        this.lang = 'en';
+        /** Instance IDs (normalized) that received a successful Refresh ID — for UI badges. */
+        this.refreshedInstanceIds = new Set();
+        /** normId -> epoch ms; keep mark until inventory catches up (API can lag one fetch). */
+        this._refreshedGraceUntil = {};
+        this._loadSessionRefreshedIds();
+        this.sessionData = null;
+        this.crBalance = null;
+
+        // Dupe loop state
+        this._loopActive      = false;
+        this._loopTimer       = null;
+        this._loopCount       = 0;
+        this._loopInstanceIds = []; // current tracked instanceIds — updated after each success
+        this._loopController  = null; // AbortController — kills all in-flight requests on STOP
+
+        // Signature features
+        this._sessionStart    = Date.now();
+        this._sessionTimerInt = null;
+        this._licenseExpiry   = null; // ms epoch; set from auth-status
+        this._statusDotInt    = null;
+        this._profiles        = this._loadProfiles();
+        this._soundEnabled    = (localStorage.getItem('cls_sound') === '1');
+        this._hapticEnabled   = (localStorage.getItem('cls_haptic') !== '0');
+        this._sessionLicense = '';
+        this._accountSession = localStorage.getItem('cls_account_session') || '';
+
+        this.init();
+    }
+
+    // Returns headers with per-user token and license from localStorage
+    _getAuthHeaders() {
+        const h = {};
+        const safe = (v) => String(v || '').replace(/[\u0080-\uFFFF]/g, '').replace(/[\r\n]/g, '').trim();
+        const tok = safe(localStorage.getItem('cls_token'));
+        const lic = safe(localStorage.getItem('deman_license')) || safe(localStorage.getItem('cls_license')) || safe(sessionStorage.getItem('deman_license')) || safe(sessionStorage.getItem('cls_license')) || safe(this._sessionLicense);
+        if (tok) h['X-User-Token'] = tok;
+        if (lic) h['X-User-License'] = lic;
+            var did = getOrCreateDeviceId();
+            if (did) h['X-Device-Id'] = did;
+        const at = safe(localStorage.getItem('cls_account_session'));
+        if (at) h['Authorization'] = 'Bearer ' + at;
+        return h;
+    }
+
+    async init() {
+        this.applyLang(); this.bindEvents();
+        this._initSignatureUI();
+        const st = await this.checkAuth();
+        if (st.allOk) {
+            document.getElementById('keyauthOverlay').classList.add('hidden');
+            document.getElementById('tokenOverlay').classList.add('hidden');
+            this._startSessionTimer();
+            this._startStatusDot();
+            if (st.licenseExpiry) this._setLicenseExpiry(st.licenseExpiry);
+            await this.loadData(); await this.loadInventory(); return;
+        }
+        if (st.keyauthRequired && !st.keyauth) {
+            document.getElementById('keyauthOverlay').classList.remove('hidden');
+            this.showKeyauthOverlay(st.panel); return;
+        }
+        document.getElementById('tokenOverlay').classList.remove('hidden');
+        this.showTokenOverlay();
+    }
+
+    async checkAuth() {
+        try {
+            const r = await fetch('/api/auth-status', { headers: this._getAuthHeaders() });
+            const j = await r.json();
+            const panel = j.keyauth_panel || 'https://keyauth.cc/app/?page=licenses';
+            const keyauthRequired = !!j.keyauth_required;
+            const keyauth = keyauthRequired ? !!j.keyauth : true;
+            const token = !!j.token;
+            const allOk = !!j.ok && keyauth && token;
+            // License expiry — KeyAuth may expose expiry_date or expires_at
+            let licenseExpiry = j.license_expiry || j.expires_at || null;
+            if (!licenseExpiry && j.keyauth_expires_at != null && j.keyauth_expires_at !== '') {
+                const at = Number(j.keyauth_expires_at);
+                if (at > 0) licenseExpiry = at < 1e12 ? at * 1000 : at;
+            }
+            if (!licenseExpiry && j.keyauth_remaining_seconds != null && j.keyauth_remaining_seconds !== '') {
+                const rs = Number(j.keyauth_remaining_seconds);
+                if (!isNaN(rs) && rs >= 0) licenseExpiry = Date.now() + rs * 1000;
+            }
+            // Update current token in sidebar if available
+            if (j.token_value) this._updateTokenReveal(j.token_value);
+            return { allOk, keyauthRequired, keyauth, token, panel, licenseExpiry };
+        } catch {
+            return { allOk: false, keyauthRequired: false, keyauth: false, token: false, panel: 'https://keyauth.cc/app/?page=licenses', licenseExpiry: null };
+        }
+    }
+
+    showKeyauthOverlay(panelUrl) {
+        const ov  = document.getElementById('keyauthOverlay');
+        const err = document.getElementById('keyauthError');
+        const inp = document.getElementById('keyauthInput');
+        const btn = document.getElementById('keyauthSaveBtn');
+        const lnk = document.getElementById('keyauthPanelLink');
+        if (lnk && panelUrl) lnk.href = panelUrl;
+        ov.classList.remove('hidden');
+        if (err) { err.classList.remove('is-visible'); err.textContent = ''; }
+
+        const submit = async () => {
+            const raw = (inp ? inp.value || '' : '').trim();
+            if (!raw) {
+                if (err) { err.textContent = 'Enter your license key first.'; err.classList.add('is-visible'); }
+                return;
+            }
+            if (btn) btn.disabled = true;
+            if (err) err.classList.remove('is-visible');
+            try {
+                let resp = null;
+                let data = {};
+                for (let attempt = 0; attempt < 3; attempt++) {
+                    resp = await fetch('/api/set-keyauth-license', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ license: raw })
+                    });
+                    data = await resp.json().catch(() => ({}));
+                    if (resp.ok) break;
+                    if (![502, 503, 504].includes(resp.status) || attempt === 2) break;
+                    await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+                }
+                if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
+                // Save license locally so this user's requests carry their own license
+                localStorage.setItem('portal_license', raw); sessionStorage.setItem('portal_license', raw); localStorage.setItem('deman_license', raw); sessionStorage.setItem('deman_license', raw); localStorage.setItem('cls_license', raw); sessionStorage.setItem('cls_license', raw); localStorage.setItem('vx_license', raw); sessionStorage.setItem('vx_license', raw);
+                this._sessionLicense = String(raw || '').trim();
+                ov.classList.add('hidden');
+                // Re-check auth to decide next step
+                const st2 = await this.checkAuth();
+                if (st2.allOk) {
+                    document.getElementById('tokenOverlay').classList.add('hidden');
+                    this._startSessionTimer();
+                    this._startStatusDot();
+                    if (st2.licenseExpiry) this._setLicenseExpiry(st2.licenseExpiry);
+                    await this.loadData(); await this.loadInventory();
+                } else {
+                    document.getElementById('tokenOverlay').classList.remove('hidden');
+                    this.showTokenOverlay();
+                }
+            } catch (e) {
+                if (err) { err.textContent = e.message || 'Invalid license key'; err.classList.add('is-visible'); }
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+        };
+
+        if (btn) btn.onclick = submit;
+        if (inp) inp.onkeydown = (e) => { if (e.key === 'Enter') submit(); };
+        setTimeout(() => { if (inp) inp.focus(); }, 100);
+    }
+
+    showTokenOverlay(hint) {
+        const ov      = document.getElementById('tokenOverlay');
+        const err     = document.getElementById('tokenError');
+        const inp     = document.getElementById('tokenInput');
+        const btn     = document.getElementById('tokenSaveBtn');
+        const eye     = document.getElementById('tokenInputEye');
+        const dismiss = document.getElementById('tokenOverlayDismiss');
+
+        // Reset state every time overlay is shown
+        ov.classList.remove('hidden');
+        err.classList.remove('is-visible');
+        err.textContent = '';
+        btn.disabled = false;
+        inp.value = '';
+        inp.type = 'password';
+        const helpPanel = document.getElementById('tokenOauthHelp');
+        if (helpPanel) helpPanel.classList.add('hidden');
+
+        // Show caller-supplied reason (e.g. "token rejected") AFTER the reset
+        if (hint) {
+            err.textContent = hint;
+            err.classList.add('is-visible');
+        }
+
+        // Dismiss button — hides overlay so user can reach Settings
+        if (dismiss) {
+            dismiss.onclick = () => { ov.classList.add('hidden'); };
+        }
+        // Skip for now button
+        const skipBtn = document.getElementById('tokenSkipBtn');
+        if (skipBtn) {
+            skipBtn.onclick = () => { ov.classList.add('hidden'); this._startSessionTimer(); this._startStatusDot(); };
+        }
+
+        // Eye toggle
+        if (eye) {
+            eye.onclick = () => {
+                inp.type = inp.type === 'password' ? 'text' : 'password';
+                eye.style.color = inp.type === 'text' ? 'var(--purple-400)' : '';
+            };
+        }
+
+        // Prevent stacking listeners
+        if (this._tokenSubmitHandler) {
+            btn.removeEventListener('click', this._tokenSubmitHandler);
+        }
+
+        this._tokenSubmitHandler = async () => {
+            const raw = (inp.value || '').trim().replace(/^Bearer\s+/i, '').trim();
+            if (!raw) {
+                err.textContent = 'Enter your token first.';
+                err.classList.add('is-visible');
+                return;
+            }
+            btn.disabled = true;
+            btn.querySelector('span').textContent = 'Saving…';
+            err.classList.remove('is-visible');
+            try {
+                const doSetToken = async () => {
+                    const resp = await fetch('/api/set-token', {
+                        method: 'POST',
+                        headers: Object.assign({ 'Content-Type': 'application/json' }, this._getAuthHeaders()),
+                        body: JSON.stringify({ token: raw, license: (this._sessionLicense || localStorage.getItem('portal_license')||sessionStorage.getItem('portal_license')||localStorage.getItem('deman_license')||localStorage.getItem('cls_license')||localStorage.getItem('vx_license')||sessionStorage.getItem('deman_license')||sessionStorage.getItem('cls_license')||sessionStorage.getItem('vx_license')||'').trim() })
+                    });
+                    const data = await resp.json().catch(() => ({}));
+                    return { resp, data };
+                };
+
+                let out = await doSetToken();
+                if (!out.resp.ok && /License required/i.test(String(out.data.error || ''))) {
+                    const licTry = (localStorage.getItem('portal_license') || sessionStorage.getItem('portal_license') || localStorage.getItem('deman_license') || localStorage.getItem('cls_license') || localStorage.getItem('vx_license') || sessionStorage.getItem('deman_license') || sessionStorage.getItem('cls_license') || sessionStorage.getItem('vx_license') || '').trim();
+                    if (licTry) {
+                        await fetch('/api/set-keyauth-license', {
+                            method: 'POST',
+                            headers: Object.assign({ 'Content-Type': 'application/json' }, this._getAuthHeaders()),
+                            body: JSON.stringify({ license: licTry })
+                        }).catch(() => {});
+                        out = await doSetToken();
+                    }
+                }
+                if (!out.resp.ok) throw new Error(out.data.error || `Server error ${out.resp.status}`);
+                // Save token locally so this user's requests use their own token
+                localStorage.setItem('cls_token', String(raw||'').replace(/^Bearer\s+/i,'').trim());
+                // Avoid full reload loop on mobile browsers; continue in-place.
+                const st2 = await this.checkAuth();
+                if (st2.allOk) {
+                    ov.classList.add('hidden');
+                    await this.loadData();
+                    await this.loadInventory();
+                } else {
+                    throw new Error('Token saved but not accepted for this session yet. Try a fresh token.');
+                }
+            } catch (e) {
+                const msg = e.message || 'Could not save token — check the value and try again.';
+                // If server says 401 here, it usually means license is missing/expired.
+                if (/401/.test(msg)) {
+                    try {
+                        const st = await this.checkAuth();
+                        if (st.keyauthRequired && !st.keyauth) {
+                            document.getElementById('keyauthOverlay').classList.remove('hidden');
+                            this.showKeyauthOverlay(st.panel);
+                            err.textContent = 'License required first. Please enter your KeyAuth license.';
+                            err.classList.add('is-visible');
+                            btn.disabled = false;
+                            btn.querySelector('span').textContent = 'Continue';
+                            return;
+                        }
+                    } catch (_) {}
+                }
+                err.textContent = msg;
+                err.classList.add('is-visible');
+                btn.disabled = false;
+                btn.querySelector('span').textContent = 'Continue';
+            }
+        };
+
+        btn.addEventListener('click', this._tokenSubmitHandler);
+        inp.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); this._tokenSubmitHandler(); } };
+        setTimeout(() => inp.focus(), 80);
+    }
+
+    _oauthProviderLabel(provider) {
+        const m = {
+            steam: 'Steam',
+            epic: 'Epic Games',
+            xbox: 'Xbox',
+            playstation: 'PlayStation',
+        };
+        return m[provider] || provider;
+    }
+
+    _allAuthPlatformControls() {
+        return Array.from(document.querySelectorAll('[data-provider]'));
+    }
+
+    /**
+     * Web OAuth: open Embark authorize URL, user pastes localhost redirect URL with code.
+     * @param {'controls'|'token'} ctx
+     * @param {string} provider steam | epic | xbox | playstation
+     */
+    async startOAuthFlow(ctx, provider) {
+        const prov = provider || 'xbox';
+        if (this._oauthRunning) return;
+        const self = this;
+        const errEl = ctx === 'token' ? document.getElementById('tokenError') : null;
+        const label = this._oauthProviderLabel(prov);
+        const platformBtns = this._allAuthPlatformControls();
+        this._oauthRunning = true;
+        platformBtns.forEach((b) => { b.disabled = true; });
+        if (errEl) {
+            errEl.classList.remove('is-visible');
+            errEl.textContent = '';
+        }
+        const helpPanel = document.getElementById('tokenOauthHelp');
+        if (helpPanel) helpPanel.classList.add('hidden');
+        if (ctx === 'controls') {
+            this.showTemporaryMessage(`Sign-in: use the link in the dialog, then paste the redirect URL. (${label})`, '#a78bfa');
+        }
+        try {
+            // Clear any stale pending OAuth on server before starting a new one.
+            try {
+                await fetch('/api/oauth-cancel', {
+                    method: 'POST',
+                    headers: Object.assign({ 'Content-Type': 'application/json' }, this._getAuthHeaders()),
+                    body: '{}',
+                });
+            } catch (_) {}
+
+            const start = await fetch('/api/start-oauth', {
+                method: 'POST',
+                headers: Object.assign({ 'Content-Type': 'application/json' }, this._getAuthHeaders()),
+                body: JSON.stringify({ provider: prov }),
+            });
+            const startData = await start.json().catch(() => ({}));
+            if (start.status === 409) {
+                throw new Error('Login already in progress — cancel and try again.');
+            }
+            if (!start.ok) {
+                throw new Error(startData.error || `HTTP ${start.status}`);
+            }
+            const authUrl = startData.auth_url;
+            if (!authUrl) throw new Error('Server did not return a sign-in URL.');
+
+            const modal = document.getElementById('oauthPasteOverlay');
+            const link = document.getElementById('oauthPasteOpenLink');
+            const ta = document.getElementById('oauthPasteUrlInput');
+            const subBtn = document.getElementById('oauthPasteSubmitBtn');
+            const canBtn = document.getElementById('oauthPasteCancelBtn');
+            const errBox = document.getElementById('oauthPasteErr');
+            if (!modal || !link || !ta || !subBtn || !canBtn) {
+                window.open(authUrl, '_blank', 'noopener,noreferrer');
+                throw new Error('Paste-URL dialog missing — use the landing page sign-in if this persists.');
+            }
+            const showOauthErr = (m) => {
+                if (!errBox) return;
+                errBox.textContent = m || '';
+                errBox.classList.toggle('is-visible', !!m);
+            };
+            link.href = authUrl;
+            ta.value = '';
+            showOauthErr('');
+            modal.classList.remove('hidden');
+
+            const cleanup = () => {
+                modal.classList.add('hidden');
+                ta.value = '';
+                showOauthErr('');
+                subBtn.onclick = null;
+                canBtn.onclick = null;
+                const bdel = modal.querySelector('[data-oauth-close="1"]');
+                if (bdel) bdel.onclick = null;
+            };
+
+            canBtn.onclick = () => {
+                fetch('/api/oauth-cancel', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, self._getAuthHeaders()), body: '{}' }).catch(() => {});
+                cleanup();
+            };
+            const bdel = modal.querySelector('[data-oauth-close="1"]');
+            if (bdel) {
+                bdel.onclick = () => {
+                    fetch('/api/oauth-cancel', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, self._getAuthHeaders()), body: '{}' }).catch(() => {});
+                    cleanup();
+                };
+            }
+
+            subBtn.onclick = async () => {
+                const pasted = (ta.value || '').trim();
+                if (!pasted) {
+                    showOauthErr('Paste the full URL from your browser address bar.');
+                    return;
+                }
+                subBtn.disabled = true;
+                showOauthErr('');
+                try {
+                    const ex = await fetch('/api/oauth-submit-redirect', {
+                        method: 'POST',
+                        headers: Object.assign({ 'Content-Type': 'application/json' }, self._getAuthHeaders()),
+                        body: JSON.stringify({ redirect_url: pasted }),
+                    });
+                    const ej = await ex.json().catch(() => ({}));
+                    if (!ex.ok) throw new Error(ej.error || 'HTTP ' + ex.status);
+                    if (ej && ej.token) {
+                        try { localStorage.setItem('cls_token', String(ej.token).replace(/^Bearer\s+/i,'').trim()); } catch (_) {}
+                        self._updateTokenReveal(ej.token);
+                    }
+                    cleanup();
+                    if (ctx === 'token') {
+                        const ov = document.getElementById('tokenOverlay');
+                        if (ov) ov.classList.add('hidden');
+                    }
+                    await self.loadData();
+                    await self.loadInventory();
+                    self.showTemporaryMessage(`Token saved — ${label} OK`, '#10b981');
+                } catch (e) {
+                    showOauthErr(e.message || 'Could not complete sign-in.');
+                } finally {
+                    subBtn.disabled = false;
+                }
+            };
+        } catch (e) {
+            const msg = e.message || 'OAuth error';
+            const isMsBlock = /different device|authentication method|retry|blocked|sign.in/i.test(msg);
+
+            if (/401/.test(msg)) {
+                try {
+                    const st = await this.checkAuth();
+                    if (st.keyauthRequired && !st.keyauth) {
+                        document.getElementById('keyauthOverlay').classList.remove('hidden');
+                        this.showKeyauthOverlay(st.panel);
+                        if (errEl) {
+                            errEl.textContent = 'License required first. Please enter your KeyAuth license.';
+                            errEl.classList.add('is-visible');
+                        }
+                        return;
+                    }
+                } catch (_) {}
+            }
+
+            if (errEl) {
+                errEl.textContent = isMsBlock && prov === 'xbox'
+                    ? 'Microsoft blocked the login. See the help panel below.'
+                    : msg;
+                errEl.classList.add('is-visible');
+            } else {
+                self.showError(msg);
+            }
+            if (prov === 'xbox' && (isMsBlock || msg.toLowerCase().includes('oauth'))) {
+                const hp = document.getElementById('tokenOauthHelp');
+                if (hp) hp.classList.remove('hidden');
+            }
+        } finally {
+            this._oauthRunning = false;
+            platformBtns.forEach((b) => { b.disabled = false; });
+        }
+    }
+
+    async loadData() {
+        try {
+            const ts = Date.now();
+            const [iconsRes, namesRes, catsRes, blackRes] = await Promise.all([
+                fetch(`/data/item_icons.json?nocache=${ts}`),
+                fetch(`/data/item_names.json?nocache=${ts}`),
+                fetch(`/data/item_categories.json?nocache=${ts}`),
+                fetch(`/data/item_blacklist.json?nocache=${ts}`)
+            ]);
+            this.itemIcons = await iconsRes.json();
+            this.itemNames = await namesRes.json();
+            this.itemCategories = await catsRes.json();
+            const blacklistArr = await blackRes.json();
+            this.itemBlacklist = new Set(blacklistArr.map(id => String(id)));
+            console.log('Loaded data files');
+        } catch (err) {
+            console.error('Error loading data:', err);
+        }
+    }
+
+    /**
+     * Turn API/JWT name fields into a plain string (Embark often nests displayName as an object).
+     */
+    _coerceDisplayString(v, depth) {
+        if (v == null) return null;
+        if (typeof depth !== 'number') depth = 0;
+        if (depth > 6) return null;
+        if (typeof v === 'string') {
+            var t = v.trim();
+            return t ? t : null;
+        }
+        if (typeof v === 'number' && !isNaN(v)) return String(v);
+        if (typeof v !== 'object') return null;
+        var nestedKeys = ['displayName', 'name', 'value', 'text', 'en', 'default', 'localizedString', 'username', 'gamertag', 'nickname'];
+        for (var i = 0; i < nestedKeys.length; i++) {
+            var nk = nestedKeys[i];
+            if (Object.prototype.hasOwnProperty.call(v, nk) && v[nk] != null) {
+                var inner = this._coerceDisplayString(v[nk], depth + 1);
+                if (inner) return inner;
+            }
+        }
+        return null;
+    }
+
+    _pickProfileDisplayName(profile) {
+        if (!profile || typeof profile !== 'object') return null;
+        var keys = ['displayName', 'name', 'username', 'playerName', 'nickname', 'personaName', 'publicName', 'gamertag'];
+        for (var k = 0; k < keys.length; k++) {
+            var v = profile[keys[k]];
+            var s = this._coerceDisplayString(v);
+            if (s) return s;
+        }
+        if (profile.profile && typeof profile.profile === 'object') {
+            var n = this._pickProfileDisplayName(profile.profile);
+            if (n) return n;
+        }
+        if (profile.data && typeof profile.data === 'object') {
+            var n2 = this._pickProfileDisplayName(profile.data);
+            if (n2) return n2;
+        }
+        return null;
+    }
+
+    async loadSession() {
+        try {
+            var r = await fetch('/api/session?nocache=' + Date.now(), {
+                cache: 'no-store',
+                headers: Object.assign({ 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache' }, this._getAuthHeaders())
+            });
+            if (!r.ok) return;
+            var data = await r.json();
+            this.sessionData = data;
+            this._renderHeaderAccount(data);
+        } catch (e) {
+            console.warn('loadSession', e);
+        }
+        // Try to load CR balance in background
+        this._loadCRBalance();
+    }
+
+    async _loadCRBalance() {
+        try {
+            var r = await fetch('/api/currencies', { cache: 'no-store', headers: this._getAuthHeaders() });
+            if (!r.ok) return;
+            var data = await r.json();
+            // Try various shapes: { cr: 1000 }, { currencies: [{ type:'CR', amount: 1000 }] },
+            // { balance: 1000 }, { credits: 1000 }, { data: { cr: 1000 } }
+            var cr = null;
+            var toNumber = function(v) {
+                if (typeof v === 'number' && !isNaN(v)) return v;
+                if (typeof v === 'string') {
+                    var cleaned = v.replace(/,/g, '').trim();
+                    if (!cleaned) return null;
+                    var n = Number(cleaned);
+                    if (!isNaN(n)) return n;
+                }
+                return null;
+            };
+            var pickByMeaning = function(root) {
+                var stack = [root];
+                var seen = [];
+                while (stack.length) {
+                    var cur = stack.pop();
+                    if (!cur || typeof cur !== 'object') continue;
+                    if (seen.indexOf(cur) !== -1) continue;
+                    seen.push(cur);
+                    if (Array.isArray(cur)) {
+                        for (var ai = 0; ai < cur.length; ai++) stack.push(cur[ai]);
+                        continue;
+                    }
+                    var keys = Object.keys(cur);
+                    for (var ki = 0; ki < keys.length; ki++) {
+                        var key = keys[ki];
+                        var val = cur[key];
+                        var lk = String(key || '').toLowerCase();
+                        if (lk.includes('coin') || lk.includes('credit') || lk === 'cr' || lk.includes('currency')) {
+                            var kNum = toNumber(val);
+                            if (kNum !== null) return kNum;
+                        }
+                        if (val && typeof val === 'object') {
+                            if (!Array.isArray(val)) {
+                                var t = String(val.type || val.name || val.currency || val.code || key || '').toLowerCase();
+                                if (t.includes('coin') || t.includes('credit') || t.includes('cr') || t.includes('currency')) {
+                                    var vNum = toNumber(val.amount);
+                                    if (vNum === null) vNum = toNumber(val.balance);
+                                    if (vNum === null) vNum = toNumber(val.value);
+                                    if (vNum === null) vNum = toNumber(val.total);
+                                    if (vNum !== null) return vNum;
+                                }
+                            }
+                            stack.push(val);
+                        }
+                    }
+                }
+                return null;
+            };
+            if (data && typeof data === 'object') {
+                // Direct number fields
+                for (var k of ['cr', 'CR', 'credits', 'Credit', 'balance', 'amount', 'coins']) {
+                    var direct = toNumber(data[k]);
+                    if (direct !== null) { cr = direct; break; }
+                }
+                // Array of currency objects
+                if (cr === null) {
+                    var pools = [data.currencies, data.wallet, data.values];
+                    for (var pi = 0; pi < pools.length && cr === null; pi++) {
+                        if (!Array.isArray(pools[pi])) continue;
+                        for (var ci = 0; ci < pools[pi].length; ci++) {
+                            var c = pools[pi][ci] || {};
+                            var t = (c.type || c.name || c.currency || c.code || '').toLowerCase();
+                            if (t.includes('cr') || t.includes('credit') || t.includes('coin')) {
+                                var fromObj = toNumber(c.amount);
+                                if (fromObj === null) fromObj = toNumber(c.balance);
+                                if (fromObj === null) fromObj = toNumber(c.value);
+                                if (fromObj === null) fromObj = toNumber(c.total);
+                                if (fromObj !== null) {
+                                    cr = fromObj;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+                // Nested data
+                if (cr === null && data.data && typeof data.data === 'object') {
+                    for (var dk of ['cr', 'CR', 'credits', 'balance', 'coins', 'amount']) {
+                        var nested = toNumber(data.data[dk]);
+                        if (nested !== null) { cr = nested; break; }
+                    }
+                }
+                if (cr === null) {
+                    cr = pickByMeaning(data);
+                }
+            }
+            var crEl = document.getElementById('crBalance');
+            var crVal = document.getElementById('crBalanceVal');
+            if (crEl && crVal && cr !== null) {
+                crVal.textContent = Number(cr).toLocaleString();
+                crEl.style.display = '';
+                crEl.setAttribute('data-has-cr', '1');
+            }
+            this.crBalance = (cr !== null && !isNaN(Number(cr))) ? Number(cr) : null;
+            this.updateStats();
+        } catch (e) {
+            // Silently fail — CR is non-critical
+        }
+    }
+
+    _renderHeaderAccount(data) {
+        var hints = data.tokenHints || {};
+        var profile = data.profile;
+        var name = this._pickProfileDisplayName(profile);
+        if (!name) {
+            name = this._coerceDisplayString(hints.preferred_username)
+                || this._coerceDisplayString(hints.name)
+                || this._coerceDisplayString(hints.gamertag)
+                || this._coerceDisplayString(hints.gtg)
+                || this._coerceDisplayString(hints.unique_name);
+        }
+        var lvl = null;
+        if (data.level != null && data.level !== '' && !isNaN(Number(data.level))) {
+            lvl = Math.floor(Number(data.level));
+            if (lvl < 0) lvl = null;
+        }
+
+        // Populate the sidebar account pill
+        var sidebarAcc = document.getElementById('sidebarAccount');
+        var sidebarName = document.getElementById('sidebarAccountName');
+        var sidebarLevel = document.getElementById('sidebarAccountLevel');
+        if (sidebarAcc && sidebarName) {
+            if (name || lvl != null) {
+                sidebarName.textContent = name || '';
+                if (sidebarLevel) {
+                    if (lvl != null) {
+                        sidebarLevel.textContent = 'Lv ' + String(lvl);
+                        sidebarLevel.style.display = '';
+                    } else {
+                        sidebarLevel.style.display = 'none';
+                    }
+                }
+                sidebarAcc.style.display = '';
+            }
+        }
+    }
+
+    getItemName(assetId) {
+        const id = String(assetId);
+        if (this.itemIcons[id]) return this.itemIcons[id].name;
+        if (this.itemNames[id]) return this.itemNames[id];
+        return 'Unknown (' + assetId + ')';
+    }
+
+    getItemIcon(assetId) {
+        const id = String(assetId);
+        return (this.itemIcons[id] && this.itemIcons[id].icon) ? this.itemIcons[id].icon : null;
+    }
+
+    getItemCategory(assetId) {
+        return this.itemCategories[String(assetId)] || 'Misc';
+    }
+
+    isBlacklisted(assetId) {
+        return this.itemBlacklist.has(String(assetId));
+    }
+
+    // Check if a mod is attached to a gun (should be hidden from main list)
+    isUnequippedMod(item) {
+        const category = this.getItemCategory(item.gameAssetId);
+        const isMod = category === 'Modification' || category === 'Mods';
+        if (!isMod) return false;
+
+        let containerItem = null;
+        for (let i = 0; i < this.inventoryData.length; i++) {
+            const container = this.inventoryData[i];
+            if (this._slotArrayContainsEntry(container.slots, item.instanceId)) {
+                containerItem = container;
+                break;
+            }
+        }
+
+        if (!containerItem) return false;
+
+        const isInInventorySlot = Number(containerItem.gameAssetId) === 1440007245;
+        return !isInInventorySlot;
+    }
+
+    /** sarc3 visibility + stash grid slot (embedded-safe) */
+    _visibleInGrid(item) {
+        if (Number(item.gameAssetId) === 1440007245) return false;
+        const name = this.getItemName(item.gameAssetId);
+        if (!this.showUnindexed && name.startsWith('Unknown')) return false;
+        if (this.isBlacklisted(item.gameAssetId)) return false;
+        if (this.isUnequippedMod(item)) return false;
+        return true;
+    }
+
+    /**
+     * True if slots[] holds this instance (handles string vs object entries and case-insensitive UUID compare).
+     */
+    _slotArrayContainsEntry(slots, instanceId) {
+        if (!slots || !slots.length) return false;
+        var id = String(instanceId).trim().toLowerCase().replace(/[{}]/g, '');
+        for (var i = 0; i < slots.length; i++) {
+            var s = slots[i];
+            if (s == null || s === '') continue;
+            if (typeof s === 'object') {
+                if (s.instanceId != null && String(s.instanceId).trim().toLowerCase().replace(/[{}]/g, '') === id) return true;
+                if (s.itemInstanceId != null && String(s.itemInstanceId).trim().toLowerCase().replace(/[{}]/g, '') === id) return true;
+                continue;
+            }
+            if (String(s).trim().toLowerCase().replace(/[{}]/g, '') === id) return true;
+        }
+        return false;
+    }
+
+    /** Parent container whose `slots` array references this instanceId (if any). */
+    _getParentContainer(instanceId) {
+        for (var i = 0; i < this.inventoryData.length; i++) {
+            var c = this.inventoryData[i];
+            if (this._slotArrayContainsEntry(c.slots, instanceId)) return c;
+        }
+        return null;
+    }
+
+    /**
+     * Internal only: locate rows to print FIELDS (not used for Backpack Only filtering).
+     * Uses container gameAssetIds on the parent chain as a weak hint to pick one stash-side vs one backpack-side row.
+     */
+    _debugIsStashContainerAsset(gameAssetId) {
+        var n = Number(gameAssetId);
+        return n === 1440007245 || n === 824256753;
+    }
+
+    _debugIsBackpackContainerAsset(gameAssetId) {
+        var n = Number(gameAssetId);
+        // Known backpack container IDs (original set)
+        if (n === 1326799221 || n === 1450686663 || n === -900626342) return true;
+        // Known looting augment gameAssetIds (all variants)
+        if (n === 303567898 || n === 433079423 || n === 947411243) return true; // MK3 Survivor/Cautious/Safekeeper
+        if (n === -1156830089 || n === 1680690244) return true; // Mk.2 / Mk.1
+        return false;
+    }
+
+    _debugRowIsStashContainer(row) {
+        return !!(row && this._debugIsStashContainerAsset(row.gameAssetId));
+    }
+
+    _debugRowIsBackpackContainer(row) {
+        return !!(row && this._debugIsBackpackContainerAsset(row.gameAssetId));
+    }
+
+    _debugAncestorStashBackpackFlags(item) {
+        var stash = false;
+        var backpack = false;
+        var hintIds = [item.containerInstanceId, item.parentInstanceId, item.ownerInstanceId, item.containerId];
+        for (var h = 0; h < hintIds.length; h++) {
+            var hinted = this._findRowByInstance(hintIds[h]);
+            if (!hinted) continue;
+            if (this._debugRowIsStashContainer(hinted)) stash = true;
+            if (this._debugRowIsBackpackContainer(hinted)) backpack = true;
+        }
+        var cur = item.instanceId;
+        for (var d = 0; d < 32; d++) {
+            var parent = this._getParentContainer(cur);
+            if (!parent) break;
+            if (this._debugRowIsStashContainer(parent)) stash = true;
+            if (this._debugRowIsBackpackContainer(parent)) backpack = true;
+            cur = parent.instanceId;
+        }
+        return { stash: stash, backpack: backpack };
+    }
+
+    _normalizeInstanceKey(nid) {
+        if (nid == null || nid === '') return '';
+        return String(nid).trim().toLowerCase().replace(/[{}]/g, '');
+    }
+
+    _findRowByInstance(nid) {
+        var id = this._normalizeInstanceKey(nid);
+        if (!id) return null;
+        for (var i = 0; i < this.inventoryData.length; i++) {
+            var row = this.inventoryData[i];
+            if (this._normalizeInstanceKey(row.instanceId) === id) return row;
+        }
+        return null;
+    }
+
+    /**
+     * Backpack Only: strict === on fields you copy from FIELDS logs.
+     * Example after you see API values:
+     *   window.__INVENTORY_BACKPACK_RULE__ = { match: { area: 'Loadout', equipmentSlotType: 'SomeExactValue' } };
+     * Optional: match.slotId, match.slotIds (array), match.slotIdMin / match.slotIdMax, match.gameAssetId
+     * All specified keys in match must pass (AND). Omit rule → no rows count as backpack (use fallback UI).
+     */
+    _isBackpackItem(item) {
+        if (!item) return false;
+        // Backend tag is the primary source of truth
+        if (item._container === 'backpack') return true;
+        if (item._container === 'stash') return false;
+        // Frontend fallback: walk parent chain looking for a known backpack container
+        var cur = item.instanceId;
+        for (var d = 0; d < 10; d++) {
+            var parent = this._getParentContainer(cur);
+            if (!parent) break;
+            var gid = Number(parent.gameAssetId);
+            // Known backpack container IDs (explicit whitelist)
+            if (gid === 1326799221 || gid === 1450686663 || gid === -900626342 ||
+                gid === 303567898 || gid === 433079423 || gid === 947411243 ||
+                gid === -1156830089 || gid === 1680690244) return true;
+            // Hit a stash container → definitely not backpack
+            if (gid === 1440007245 || gid === 824256753) return false;
+            cur = parent.instanceId;
+        }
+        // Default: assume stash if backend didn't tag and no known container found
+        return false;
+        // Legacy window rule (kept for manual override support)
+        var w = typeof window !== 'undefined' ? window : null;
+        if (!w || !w.__INVENTORY_BACKPACK_RULE__ || typeof w.__INVENTORY_BACKPACK_RULE__ !== 'object') return false;
+        var m = w.__INVENTORY_BACKPACK_RULE__.match;
+        if (!m || typeof m !== 'object') return false;
+        var any = false;
+        if (m.area !== undefined) {
+            any = true;
+            if (item.area !== m.area) return false;
+        }
+        if (m.equipmentSlotType !== undefined) {
+            any = true;
+            if (item.equipmentSlotType !== m.equipmentSlotType) return false;
+        }
+        if (m.slotId !== undefined) {
+            any = true;
+            if (Number(item.slotId) !== Number(m.slotId)) return false;
+        }
+        if (Array.isArray(m.slotIds) && m.slotIds.length > 0) {
+            any = true;
+            var sid = item.slotId == null ? NaN : Number(item.slotId);
+            if (m.slotIds.indexOf(sid) === -1) return false;
+        }
+        if (m.slotIdMin !== undefined) {
+            any = true;
+            if (item.slotId == null || Number(item.slotId) < m.slotIdMin) return false;
+        }
+        if (m.slotIdMax !== undefined) {
+            any = true;
+            if (item.slotId == null || Number(item.slotId) > m.slotIdMax) return false;
+        }
+        if (m.gameAssetId !== undefined) {
+            any = true;
+            if (Number(item.gameAssetId) !== Number(m.gameAssetId)) return false;
+        }
+        return any;
+    }
+
+    _logFieldsLine(item) {
+        if (!item) {
+            console.log('FIELDS:', {
+                instanceId: null,
+                slotId: undefined,
+                area: undefined,
+                equipmentSlotType: undefined,
+                gameAssetId: undefined
+            });
+            return;
+        }
+        console.log('FIELDS:', {
+            instanceId: item.instanceId,
+            slotId: item.slotId,
+            area: item.area,
+            equipmentSlotType: item.equipmentSlotType,
+            gameAssetId: item.gameAssetId
+        });
+    }
+
+    /** Pick two rows to compare: intended for in-game BACKPACK (right) vs STASH (left). Selection uses internal map only to suggest rows — verify visually. */
+    _logBackpackVsStashFieldSamples() {
+        var bpSample = null;
+        var stashSample = null;
+        for (var i = 0; i < this.inventoryData.length; i++) {
+            var it = this.inventoryData[i];
+            var flags = this._debugAncestorStashBackpackFlags(it);
+            if (flags.backpack && !bpSample) bpSample = it;
+            if (flags.stash && !stashSample) stashSample = it;
+            if (bpSample && stashSample) break;
+        }
+        if (!bpSample) {
+            var vis = this._getAllVisibleItems();
+            if (vis.length) {
+                bpSample = vis[0];
+                console.warn('[FIELDS] No backpack-ancestor hint; first visible row below — confirm it is actually from BACKPACK in-game.');
+            }
+        }
+        if (!stashSample) {
+            var vis2 = this._getAllVisibleItems();
+            for (var j = 0; j < vis2.length; j++) {
+                if (!bpSample || vis2[j].instanceId !== bpSample.instanceId) {
+                    stashSample = vis2[j];
+                    console.warn('[FIELDS] No stash-ancestor hint; using a different visible row — confirm it is from STASH in-game.');
+                    break;
+                }
+            }
+        }
+        console.log('[Backpack filter] Compare with in-game BACKPACK (right). Then set window.__INVENTORY_BACKPACK_RULE__ = { match: { … } } using strict API values.');
+        this._logFieldsLine(bpSample);
+        console.log('[Backpack filter] Compare with in-game STASH (left).');
+        this._logFieldsLine(stashSample);
+    }
+
+    _parseCloneIdsResponse(data) {
+        var out = [];
+        if (data == null) return out;
+        if (Array.isArray(data)) {
+            for (var i = 0; i < data.length; i++) {
+                var x = data[i];
+                if (typeof x === 'string') out.push(x);
+                else if (x && x.instanceId) out.push(x.instanceId);
+            }
+            return out;
+        }
+        var keys = ['instanceIds', 'clones', 'ids', 'items'];
+        for (var k = 0; k < keys.length; k++) {
+            var arr = data[keys[k]];
+            if (Array.isArray(arr)) return this._parseCloneIdsResponse(arr);
+        }
+        return out;
+    }
+
+    /** All rows that pass the normal grid visibility rules (no backpack filter). */
+    _getAllVisibleItems() {
+        var out = [];
+        for (var i = 0; i < this.inventoryData.length; i++) {
+            var item = this.inventoryData[i];
+            if (this._visibleInGrid(item)) out.push(item);
+        }
+        return out;
+    }
+
+    /**
+     * List used for stats and as the starting point for the table (before search/sort).
+     * When Backpack Only is on: filter with _isBackpackItem; safe fallback if zero matches.
+     */
+    _getPreSearchDisplayList(skipWarn) {
+        var base = this._getAllVisibleItems();
+
+        // Container filter: 'all', 'stash', 'backpack'
+        if (this.containerFilter === 'stash') {
+            base = base.filter(function(item) { return !this._isBackpackItem(item); }.bind(this));
+        } else if (this.containerFilter === 'backpack') {
+            base = base.filter(function(item) { return this._isBackpackItem(item); }.bind(this));
+        }
+
+        var strictN = 0;
+        for (var s = 0; s < base.length; s++) {
+            if (this._isBackpackItem(base[s])) strictN++;
+        }
+        this._strictBackpackMatchCount = strictN;
+
+        if (!this.backpackOnly) {
+            this._backpackFilterFallbackActive = false;
+            this._cachedVisibleForTable = base;
+            return base;
+        }
+
+        var backpackRows = base.filter(function(item) {
+            return this._isBackpackItem(item);
+        }.bind(this));
+
+        if (backpackRows.length > 0) {
+            this._backpackFilterFallbackActive = false;
+            this._cachedVisibleForTable = backpackRows;
+            return backpackRows;
+        }
+
+        if (base.length > 0) {
+            if (!skipWarn) {
+                console.warn('[Backpack Only] No rows matched window.__INVENTORY_BACKPACK_RULE__. Set { match: { … } } from FIELDS logs (strict ===). Showing all visible items (fallback).');
+            }
+            this._backpackFilterFallbackActive = true;
+            this._cachedVisibleForTable = base;
+            return base;
+        }
+
+        this._backpackFilterFallbackActive = false;
+        this._cachedVisibleForTable = [];
+        return [];
+    }
+
+    syncBackpackToggleUI() {
+        var btn = document.getElementById('backpackOnlyBtn');
+        var badge = document.getElementById('backpackOnlyBadge');
+        if (btn) {
+            btn.setAttribute('aria-pressed', this.backpackOnly ? 'true' : 'false');
+            if (this.backpackOnly) btn.classList.add('active');
+            else btn.classList.remove('active');
+        }
+        if (badge) {
+            if (this.backpackOnly) {
+                badge.classList.remove('hidden');
+                badge.textContent = (this._strictBackpackMatchCount != null ? this._strictBackpackMatchCount : 0) + ' in backpack';
+            } else {
+                badge.classList.add('hidden');
+                badge.textContent = '';
+            }
+        }
+    }
+
+    syncRefreshedOnlyToggleUI() {
+        var btn = document.getElementById('refreshedOnlyBtn');
+        if (!btn) return;
+        btn.setAttribute('aria-pressed', this.showRefreshedOnly ? 'true' : 'false');
+        if (this.showRefreshedOnly) btn.classList.add('active');
+        else btn.classList.remove('active');
+    }
+
+    updateBackpackFallbackBanner() {
+        var el = document.getElementById('backpackFallbackBanner');
+        if (!el) return;
+        if (this.backpackOnly && this._backpackFilterFallbackActive) {
+            el.classList.remove('inventory-banner--hidden');
+            el.textContent = 'Backpack Only: set window.__INVENTORY_BACKPACK_RULE__ from console FIELDS output (strict API values). Showing all visible items until then.';
+        } else {
+            el.classList.add('inventory-banner--hidden');
+            el.textContent = '';
+        }
+    }
+
+    _sessionRefreshedStorageKey() {
+        return 'arcInvSessionRefreshedIds';
+    }
+
+    /** Grace period (ms) after Refresh ID: inventory fetch may still list the old id briefly — do not drop the new id mark yet. */
+    static _REFRESHED_GRACE_MS() {
+        return 180000;
+    }
+
+    _normInstanceId(id) {
+        return String(id || '').trim().toLowerCase().replace(/[{}]/g, '');
+    }
+
+    _readRefreshedStorageRaw() {
+        try {
+            return localStorage.getItem(this._sessionRefreshedStorageKey()) || sessionStorage.getItem(this._sessionRefreshedStorageKey());
+        } catch (e) {
+            try {
+                return sessionStorage.getItem(this._sessionRefreshedStorageKey());
+            } catch (e2) {
+                return null;
+            }
+        }
+    }
+
+    _writeRefreshedStorageRaw(str) {
+        try {
+            localStorage.setItem(this._sessionRefreshedStorageKey(), str);
+        } catch (e) { /* ignore */ }
+        try {
+            sessionStorage.setItem(this._sessionRefreshedStorageKey(), str);
+        } catch (e2) { /* ignore */ }
+    }
+
+    _loadSessionRefreshedIds() {
+        this._refreshedGraceUntil = {};
+        try {
+            var raw = this._readRefreshedStorageRaw();
+            if (!raw) return;
+            var parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) {
+                for (var i = 0; i < parsed.length; i++) {
+                    this.refreshedInstanceIds.add(this._normInstanceId(parsed[i]));
+                }
+                return;
+            }
+            if (parsed && parsed.v === 2 && Array.isArray(parsed.ids)) {
+                for (var j = 0; j < parsed.ids.length; j++) {
+                    this.refreshedInstanceIds.add(this._normInstanceId(parsed.ids[j]));
+                }
+                if (parsed.grace && typeof parsed.grace === 'object') {
+                    for (var gk in parsed.grace) {
+                        if (!Object.prototype.hasOwnProperty.call(parsed.grace, gk)) continue;
+                        var nk = this._normInstanceId(gk);
+                        this._refreshedGraceUntil[nk] = Number(parsed.grace[gk]) || 0;
+                    }
+                }
+            }
+        } catch (e) { /* ignore */ }
+    }
+
+    _saveSessionRefreshedIds() {
+        try {
+            this._writeRefreshedStorageRaw(
+                JSON.stringify({
+                    v: 2,
+                    ids: Array.from(this.refreshedInstanceIds),
+                    grace: this._refreshedGraceUntil,
+                })
+            );
+        } catch (e) { /* ignore */ }
+    }
+
+    _pruneSessionRefreshedIds() {
+        var valid = {};
+        for (var i = 0; i < this.inventoryData.length; i++) {
+            valid[this._normInstanceId(this.inventoryData[i].instanceId)] = true;
+        }
+        var now = Date.now();
+        var next = new Set();
+        var nextGrace = {};
+        this.refreshedInstanceIds.forEach(function(id) {
+            if (valid[id]) {
+                next.add(id);
+                if (this._refreshedGraceUntil[id]) nextGrace[id] = this._refreshedGraceUntil[id];
+            } else if (this._refreshedGraceUntil[id] && now < this._refreshedGraceUntil[id]) {
+                next.add(id);
+                nextGrace[id] = this._refreshedGraceUntil[id];
+            }
+        }.bind(this));
+        this.refreshedInstanceIds = next;
+        this._refreshedGraceUntil = nextGrace;
+        this._saveSessionRefreshedIds();
+    }
+
+    _isSessionRefreshedItem(item) {
+        return this.refreshedInstanceIds.has(this._normInstanceId(item.instanceId));
+    }
+
+    _registerRefreshedNewId(newId) {
+        if (!newId) return;
+        var n = this._normInstanceId(newId);
+        this.refreshedInstanceIds.add(n);
+        this._refreshedGraceUntil[n] = Date.now() + InventoryViewer._REFRESHED_GRACE_MS();
+        this._saveSessionRefreshedIds();
+    }
+
+    clearSessionRefreshedMarks() {
+        this.refreshedInstanceIds.clear();
+        this._refreshedGraceUntil = {};
+        try {
+            localStorage.removeItem(this._sessionRefreshedStorageKey());
+        } catch (e) { /* ignore */ }
+        try {
+            sessionStorage.removeItem(this._sessionRefreshedStorageKey());
+        } catch (e2) { /* ignore */ }
+        this.filterAndDisplay();
+        this.updateStats();
+    }
+
+    t(key, vars) {
+        var bundle = UI_I18N[this.lang] || UI_I18N.en;
+        var s = bundle[key];
+        if (s === undefined) s = UI_I18N.en[key];
+        if (s === undefined) return key;
+        if (vars && typeof s === 'string') {
+            Object.keys(vars).forEach(function(k) {
+                s = s.split('{' + k + '}').join(String(vars[k]));
+            });
+        }
+        return s;
+    }
+
+    applyLang() {
+        document.documentElement.lang = 'en';
+        var titleEl = document.getElementById('appTitle');
+        if (titleEl) titleEl.textContent = this.t('appTitle');
+        document.title = this.t('appTitle');
+    }
+
+    bindEvents() {
+        var refreshBtn = document.getElementById('refreshBtn');
+        if (refreshBtn) refreshBtn.onclick = () => this.loadInventory();
+        var searchInput = document.getElementById('searchInput');
+        if (searchInput) searchInput.oninput = () => this.filterAndDisplay();
+        var sortBy = document.getElementById('sortBy');
+        if (sortBy) sortBy.onchange = () => this.filterAndDisplay();
+
+
+        var clearSel = document.getElementById('clearSelectionBtn');
+        if (clearSel) {
+            clearSel.onclick = () => {
+                this.selectedIds.clear();
+                var bc = document.getElementById('bulkCount');
+                if (bc) bc.textContent = '0';
+                this._syncBulkActions();
+                this.filterAndDisplay();
+            };
+        }
+
+        var selVis = document.getElementById('selectVisibleToggle');
+        if (selVis) {
+            selVis.onchange = () => {
+                var visible = this._cachedVisibleForTable || [];
+                if (selVis.checked) {
+                    for (var i = 0; i < visible.length; i++) this.selectedIds.add(visible[i].instanceId);
+                } else {
+                    for (var j = 0; j < visible.length; j++) this.selectedIds.delete(visible[j].instanceId);
+                }
+                this._syncBulkActions();
+                this.filterAndDisplay();
+            };
+        }
+
+        var bulkRefreshIds = document.getElementById('bulkRefreshIdsBtn');
+        if (bulkRefreshIds) bulkRefreshIds.onclick = () => { this._haptic(); this.bulkRefreshSelected(); };
+        var bulkSafePocketBtn = document.getElementById('bulkSafePocketBtn');
+        if (bulkSafePocketBtn) bulkSafePocketBtn.onclick = () => {
+            this._haptic();
+            if (this._loopActive) this.stopDupeLoop();
+            else this.startDupeLoop();
+        };
+        var bulkDeselectBtn = document.getElementById('bulkDeselectBtn');
+        if (bulkDeselectBtn) {
+            bulkDeselectBtn.onclick = () => {
+                this.selectedIds.clear();
+                var bc = document.getElementById('bulkCount');
+                if (bc) bc.textContent = '0';
+                this._syncBulkActions();
+                this.filterAndDisplay();
+            };
+        }
+
+
+        this._bindSidebarNav();
+        this._bindSettings();
+
+        var refreshedOnlyBtn = document.getElementById('refreshedOnlyBtn');
+        if (refreshedOnlyBtn) {
+            refreshedOnlyBtn.addEventListener('click', function() {
+                this.showRefreshedOnly = !this.showRefreshedOnly;
+                this.syncRefreshedOnlyToggleUI();
+                this.updateStats();
+                this.filterAndDisplay();
+            }.bind(this));
+        }
+
+        // Container filter buttons
+        var self = this;
+        ['containerFilterAll', 'containerFilterStash', 'containerFilterBackpack'].forEach(function(btnId) {
+            var btn = document.getElementById(btnId);
+            if (!btn) return;
+            btn.addEventListener('click', function() {
+                var map = { containerFilterAll: 'all', containerFilterStash: 'stash', containerFilterBackpack: 'backpack' };
+                self.containerFilter = map[btnId];
+                ['containerFilterAll', 'containerFilterStash', 'containerFilterBackpack'].forEach(function(id) {
+                    var b = document.getElementById(id);
+                    if (b) b.classList.toggle('active', id === btnId);
+                });
+                self.filterAndDisplay();
+            });
+        });
+
+        const bulkBtn = document.getElementById('bulkRefreshBtn');
+        if (bulkBtn) bulkBtn.onclick = () => this.bulkRefreshSelected();
+
+        const wireAuthPlatforms = (root, ctx) => {
+            if (!root) return;
+            root.querySelectorAll('[data-provider]').forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    const p = btn.getAttribute('data-provider');
+                    if (p) this.startOAuthFlow(ctx, p);
+                });
+            });
+        };
+        wireAuthPlatforms(document.getElementById('sidebarAuthPlatformGrid'), 'controls');
+        wireAuthPlatforms(document.getElementById('tokenAuthPlatformGrid'), 'token');
+
+        var clearBadgesBtn = document.getElementById('clearBadgesBtn');
+        if (clearBadgesBtn) {
+            clearBadgesBtn.onclick = () => this.clearSessionRefreshedMarks();
+        }
+
+        // How To Use modal
+        var howToUseBtn   = document.getElementById('howToUseBtn');
+        var howToUseModal = document.getElementById('howToUseModal');
+        var howToUseClose = document.getElementById('howToUseClose');
+
+        var openHowTo = function() {
+            if (howToUseModal) howToUseModal.classList.remove('hidden');
+        };
+        var closeHowTo = function() {
+            if (howToUseModal) howToUseModal.classList.add('hidden');
+        };
+
+        if (howToUseBtn)   howToUseBtn.onclick = openHowTo;
+        if (howToUseClose) howToUseClose.onclick = closeHowTo;
+        if (howToUseModal) {
+            howToUseModal.querySelector('.how-to-modal__backdrop').onclick = closeHowTo;
+            howToUseModal.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') closeHowTo();
+            });
+        }
+
+    }
+
+    async loadInventory() {
+        if (this.isLoading) return;
+        this.isLoading = true;
+        this.showLoading(true);
+        try {
+            var nocache = Date.now();
+            var fetchOpts = {
+                cache: 'no-store',
+                headers: Object.assign({
+                    'Cache-Control': 'no-cache, no-store, must-revalidate',
+                    'Pragma': 'no-cache'
+                }, this._getAuthHeaders())
+            };
+            const _fetchWithTimeout = function(url, opts, ms) {
+                const ctl = new AbortController();
+                const t = setTimeout(function(){ try { ctl.abort(); } catch(_) {} }, ms || 15000);
+                const o = Object.assign({}, opts || {}, { signal: ctl.signal });
+                return fetch(url, o).finally(function(){ clearTimeout(t); });
+            };
+            const [resp, cResp] = await Promise.all([
+                _fetchWithTimeout('/api/inventory?nocache=' + nocache, fetchOpts, 15000),
+                _fetchWithTimeout('/api/clones?nocache=' + nocache, fetchOpts, 8000).catch(function() { return null; })
+            ]);
+            if (resp.status === 403) {
+                document.getElementById('keyauthOverlay').classList.remove('hidden');
+                const st403 = await this.checkAuth();
+                this.showKeyauthOverlay(st403.panel);
+                throw new Error('KeyAuth license required');
+            } else if (resp.status === 401) {
+                document.getElementById('tokenOverlay').classList.remove('hidden');
+                var tMsg = 'Your token was rejected — it may be expired or invalid. Get a fresh one above, or paste it below.';
+                try {
+                    var tj = await resp.clone().json();
+                    if (tj && tj.error) tMsg = String(tj.error);
+                } catch (_) {}
+                this.showTokenOverlay(tMsg);
+                throw new Error(tMsg);
+            }
+            if (!resp.ok) {
+                var errMsg = 'HTTP ' + resp.status;
+                try {
+                    var rawTxt = await resp.text();
+                    try {
+                        var ej = JSON.parse(rawTxt);
+                        if (ej && ej.error) errMsg = String(ej.error);
+                    } catch (_) {
+                        var t = (rawTxt || '').trim();
+                        if (t && t.length < 600 && t.charAt(0) !== '<') errMsg = t;
+                    }
+                } catch (_) {}
+                throw new Error(errMsg);
+            }
+            const data = await resp.json();
+            if (Array.isArray(data)) {
+                this.inventoryData = data;
+            } else if (data && typeof data === 'object') {
+                this.inventoryData =
+                    data.items ||
+                    data.Items ||
+                    data.inventory ||
+                    data.Inventory ||
+                    data.data ||
+                    [];
+                if (!Array.isArray(this.inventoryData)) this.inventoryData = [];
+            } else {
+                this.inventoryData = [];
+            }
+            if (this.inventoryData.length) {
+                this._logBackpackVsStashFieldSamples();
+            }
+
+            this.cloneInstanceIds = new Set();
+            if (cResp && cResp.ok) {
+                try {
+                    const cdata = await cResp.json();
+                    var cidList = this._parseCloneIdsResponse(cdata);
+                    for (var ci = 0; ci < cidList.length; ci++) {
+                        this.cloneInstanceIds.add(cidList[ci]);
+                    }
+                } catch (e) {
+                    console.warn('[clones] parse failed:', e);
+                }
+            }
+
+            this._pruneSessionRefreshedIds();
+
+            this.selectedIds.forEach(id => {
+                if (!this.inventoryData.find(i => i.instanceId === id)) this.selectedIds.delete(id);
+            });
+            console.log('Loaded ' + this.inventoryData.length + ' items (full inventory on server)');
+            this.updateStats();
+            if (this.inventoryData.length) {
+                this.filterAndDisplay();
+            } else {
+                this._cachedVisibleForTable = [];
+                this.renderCards([]);
+                this._syncBulkActions();
+            }
+            var shown = this._cachedVisibleForTable || [];
+            this.showTemporaryMessage(this.t('msgListUpdated', { n: shown.length }), '#10b981');
+            this.loadSession();
+        } catch (err) {
+            console.error('Error loading inventory:', err);
+            this.showError(err.message);
+        } finally {
+            this.isLoading = false;
+            this.showLoading(false);
+        }
+    }
+
+    async refreshItemId(item) {
+        const name = this.getItemName(item.gameAssetId);
+        console.log('Refreshing ID for: ' + name + ' (' + item.instanceId + ')');
+
+        const response = await fetch('/api/change-id', {
+            method: 'POST',
+            headers: Object.assign({ 'Content-Type': 'application/json' }, this._getAuthHeaders()),
+            body: JSON.stringify({ targetId: item.instanceId })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok || !result.success) {
+            throw new Error(result.error || result.message || 'Change ID failed');
+        }
+
+        var newId = result.new_id != null ? result.new_id : result.newId;
+        console.log('Refreshed: ' + name + ' -> ' + newId);
+        this._registerRefreshedNewId(newId);
+        return newId;
+    }
+
+    async bulkRefreshSelected() {
+        if (this.selectedIds.size === 0) {
+            alert(this.t('bulkNoSelect'));
+            return;
+        }
+
+        const count = this.selectedIds.size;
+        const instanceIds = [...this.selectedIds];
+        this.selectedIds.clear();
+        this._syncBulkActions();
+
+        var BULK_CHUNK = 300;
+        var jobs = [];
+        for (var ji = 0; ji < instanceIds.length; ji++) {
+            var jid = instanceIds[ji];
+            var jitem = this.inventoryData.find(function(i) { return i.instanceId === jid; });
+            if (!jitem) {
+                continue;
+            }
+            jobs.push({ id: jid, name: this.getItemName(jitem.gameAssetId) });
+        }
+
+        var total = jobs.length;
+        var skipped = instanceIds.length - total;
+        const progress = this.showBulkProgress(total || 1);
+
+        let done = 0, failed = skipped;
+        const errors = [];
+        if (skipped > 0) {
+            errors.push(skipped + ' item(s) not found in current list');
+        }
+
+        if (total === 0) {
+            progress.update(1, 'Nothing to refresh');
+            progress.finish(done, failed, errors);
+            setTimeout(function() { this.loadInventory(); }.bind(this), 150);
+            return;
+        }
+
+        var processed = 0;
+        for (var c = 0; c < jobs.length; c += BULK_CHUNK) {
+            var slice = jobs.slice(c, c + BULK_CHUNK);
+            var ids = slice.map(function(j) { return j.id; });
+            var batchNum = Math.floor(c / BULK_CHUNK) + 1;
+            progress.update(processed, this.t('batchLine', { b: batchNum, n: slice.length }));
+
+            try {
+                var resp = await fetch('/api/change-id-bulk', {
+                    method: 'POST',
+                    headers: Object.assign({ 'Content-Type': 'application/json' }, this._getAuthHeaders()),
+                    body: JSON.stringify({ targetIds: ids })
+                });
+                var data = await resp.json().catch(function() { return {}; });
+                if (!resp.ok) {
+                    for (var fi = 0; fi < slice.length; fi++) {
+                        failed++;
+                        errors.push(slice[fi].name + ': ' + (data.error || 'HTTP ' + resp.status));
+                        processed++;
+                        progress.update(processed, processed + ' / ' + total);
+                    }
+                    continue;
+                }
+                var results = data.results || [];
+                for (var ri = 0; ri < slice.length; ri++) {
+                    var job = slice[ri];
+                    var r = results[ri];
+                    if (r && r.targetId === job.id && r.success) {
+                        done++;
+                        if (r.new_id) {
+                            this._registerRefreshedNewId(r.new_id);
+                        }
+                    } else if (r && r.targetId === job.id) {
+                        failed++;
+                        errors.push(job.name + ': ' + (r.error || this.t('errFailed')));
+                    } else {
+                        failed++;
+                        errors.push(job.name + ': ' + this.t('errUnexpected'));
+                    }
+                    processed++;
+                    progress.update(processed, '⚡ ' + processed + ' / ' + total);
+                }
+            } catch (err) {
+                console.error('Bulk chunk error:', err);
+                for (var ei = 0; ei < slice.length; ei++) {
+                    failed++;
+                    errors.push(slice[ei].name + ': ' + err.message);
+                    processed++;
+                    progress.update(processed, processed + ' / ' + total);
+                }
+            }
+        }
+
+        progress.finish(done, failed, errors);
+        this._onBulkFinished();
+        setTimeout(function() { this.loadInventory(); }.bind(this), 150);
+    }
+
+    // ── Super Safe Pocket ─────────────────────────────────────────────────────
+    // Processes each selected item one-by-one using /api/change-id (sequential,
+    // no prompt, takes time — shows live per-item progress).
+
+    async safePocket() {
+        if (this.selectedIds.size === 0) return;
+
+        const instanceIds = [...this.selectedIds];
+        this.selectedIds.clear();
+        this._syncBulkActions();
+
+        const total = instanceIds.length;
+        const overlay = this._showSafePocketBulkOverlay(total);
+
+        try {
+            const resp = await fetch('/api/safe-pocket', {
+                method: 'POST',
+                headers: Object.assign({ 'Content-Type': 'application/json' }, this._getAuthHeaders()),
+                body: JSON.stringify({ targetIds: instanceIds, cycles: 1 })
+            });
+            const data = await resp.json().catch(function() { return {}; });
+
+            if (!resp.ok || !data.ok) {
+                overlay.finish(0, total, 0, 0, [data.error || data.message || 'Failed']);
+            } else {
+                const succeeded = data.succeeded || 0;
+                const safeCopied = data.safe_copied || 0;
+                const skipped = data.skipped || 0;
+                const failed = Math.max(0, total - succeeded - safeCopied - skipped);
+                overlay.finish(succeeded, failed, skipped, safeCopied, []);
+            }
+        } catch (err) {
+            overlay.finish(0, total, [err.message || 'Network error']);
+        }
+
+        this._onBulkFinished();
+        setTimeout(function() { this.loadInventory(); }.bind(this), 300);
+    }
+
+    _showSafePocketBulkOverlay(total) {
+        var existing = document.getElementById('safePocketOverlay');
+        if (existing) existing.remove();
+
+        var overlay = document.createElement('div');
+        overlay.id = 'safePocketOverlay';
+        overlay.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:9999;background:linear-gradient(135deg,#0f0a1a,#1a0f2e);border:1px solid rgba(236,72,153,0.45);border-radius:14px;padding:20px 24px;min-width:320px;max-width:420px;box-shadow:0 10px 40px rgba(0,0,0,0.8),0 0 24px rgba(167,139,250,0.12);font-family:Inter,sans-serif;font-size:13px;color:#e0e0e0;';
+        overlay.innerHTML = [
+            '<div style="font-weight:700;background:linear-gradient(90deg,#c4b5fd,#a78bfa,#ec4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:12px;font-size:14px;letter-spacing:0.02em">✨ Dupe Backpack</div>',
+            '<div id="spBar" style="background:rgba(167,139,250,0.15);border-radius:6px;height:8px;margin-bottom:12px;overflow:hidden;">',
+            '  <div id="spFill" style="background:linear-gradient(90deg,#a78bfa,#ec4899);height:100%;width:0%;border-radius:6px;animation:spPulse 1.2s ease-in-out infinite;"></div>',
+            '</div>',
+            '<div id="spStatus" style="color:#c4b5fd;margin-bottom:6px">Duplicating ' + total + ' items…</div>',
+            '<div id="spCount" style="color:#a78bfa">Processing in parallel, please wait…</div>'
+        ].join('');
+
+        // Animate the bar while waiting
+        var style = document.createElement('style');
+        style.id = 'spPulseStyle';
+        style.textContent = '@keyframes spPulse { 0%{width:10%} 50%{width:85%} 100%{width:10%} }';
+        document.head.appendChild(style);
+        document.body.appendChild(overlay);
+
+        return {
+            finish: function(done, failed, skipped, safeCopied, errors) {
+                var ps = document.getElementById('spPulseStyle');
+                if (ps) ps.remove();
+                var fill = document.getElementById('spFill');
+                var status = document.getElementById('spStatus');
+                var count = document.getElementById('spCount');
+                if (fill) { fill.style.animation = 'none'; fill.style.width = '100%'; fill.style.background = 'linear-gradient(90deg,#a78bfa,#ec4899)'; }
+                if (status) {
+                    if (failed === 0 && skipped === 0) {
+                        status.style.color = '#c4b5fd';
+                        if (safeCopied > 0) {
+                            status.textContent = '✅ Done! ' + safeCopied + ' item(s) duplicated to stash';
+                        } else {
+                            status.textContent = '✅ All items refreshed successfully!';
+                        }
+                    } else if (done === 0 && safeCopied === 0) {
+                        status.style.color = '#f87171';
+                        status.textContent = '❌ ' + (errors[0] || 'Failed');
+                    } else {
+                        status.style.color = '#fb923c';
+                        status.textContent = '⚠️ Completed with some issues';
+                    }
+                }
+                if (count) {
+                    var parts = [];
+                    if (done > 0) parts.push(done + ' refreshed');
+                    if (safeCopied > 0) parts.push(safeCopied + ' duplicated in stash');
+                    if (skipped > 0) parts.push(skipped + ' not found');
+                    if (failed > 0) parts.push(failed + ' failed');
+                    count.style.color = '#a78bfa';
+                    count.textContent = parts.join(' · ');
+                }
+                setTimeout(function() { var o = document.getElementById('safePocketOverlay'); if (o) o.remove(); }, 5000);
+            }
+        };
+    }
+
+
+
+    showBulkProgress(total) {
+        const overlay = document.createElement('div');
+        overlay.id = 'bulkProgressOverlay';
+        overlay.style.cssText = 'position:fixed; bottom:20px; right:20px; z-index:9999; background:#1a1a3a; border:1px solid #7c3aed; border-radius:12px; padding:20px 24px; min-width:320px; max-width:420px; box-shadow:0 10px 40px rgba(0,0,0,0.7); font-family:monospace; font-size:13px; color:#e0e0e0;';
+        overlay.innerHTML = '<div style="font-weight:bold;color:#a78bfa;margin-bottom:12px;font-size:14px">Bulk Refresh in Progress</div><div id="bpBar" style="background:rgba(124,58,237,0.2); border-radius:6px; height:8px; margin-bottom:12px; overflow:hidden;"><div id="bpFill" style="background:linear-gradient(90deg,#7c3aed,#a78bfa); height:100%; width:0%; transition:width 0.3s ease; border-radius:6px;"></div></div><div id="bpStatus" style="color:#ccc;margin-bottom:6px">Starting...</div><div id="bpCount" style="color:#a78bfa">0 / ' + total + '</div>';
+        document.body.appendChild(overlay);
+
+        return {
+            update: function(current, statusText) {
+                var pct = Math.round((current / total) * 100);
+                var fill = document.getElementById('bpFill');
+                if (fill) fill.style.width = pct + '%';
+                var status = document.getElementById('bpStatus');
+                if (status) status.textContent = statusText;
+                var count = document.getElementById('bpCount');
+                if (count) count.textContent = current + ' / ' + total;
+            },
+            finish: function(done, failed, errors) {
+                var fill = document.getElementById('bpFill');
+                if (fill) {
+                    fill.style.width = '100%';
+                    fill.style.background = failed > 0 ? '#f59e0b' : '#10b981';
+                }
+                var status = document.getElementById('bpStatus');
+                if (status) {
+                    status.innerHTML = failed > 0 ? '⚠️ ' + done + ' succeeded, ' + failed + ' failed' : '✅ All ' + done + ' items refreshed!';
+                }
+                if (errors.length) {
+                    var errDiv = document.createElement('div');
+                    errDiv.style.cssText = 'margin-top:10px;color:#ef4444;font-size:11px;max-height:80px;overflow-y:auto';
+                    errDiv.textContent = errors.join('\n');
+                    overlay.appendChild(errDiv);
+                }
+                setTimeout(function() { overlay.remove(); }, 5000);
+            }
+        };
+    }
+
+    // ── Dupe Backpack — Infinite Refresh Loop ─────────────────────────────────
+
+    startDupeLoop() {
+        if (this.selectedIds.size === 0) {
+            alert('No items selected.\nCheck the boxes first.');
+            return;
+        }
+
+        // Snapshot the current instanceIds — we track them ourselves as they rotate
+        this._loopInstanceIds = [...this.selectedIds];
+
+        this._loopController = new AbortController();
+        this._loopActive     = true;
+        this._loopCount      = 0;
+        this._updateDupeBtn();
+        this._loopRun(); // starts the loop (no await — runs independently in background)
+    }
+
+    stopDupeLoop() {
+        this._loopActive = false;
+        // Abort all in-flight requests instantly
+        if (this._loopController) {
+            this._loopController.abort();
+            this._loopController = null;
+        }
+        this._updateDupeBtn();
+        this.loadInventory();
+    }
+
+    _updateDupeBtn() {
+        var btn = document.getElementById('bulkSafePocketBtn');
+        if (!btn) return;
+        if (this._loopActive) {
+            btn.textContent = '⏹ STOP';
+            btn.style.background = 'linear-gradient(135deg,#7f1d1d,#ef4444)';
+            btn.style.color = '#fff';
+            btn.style.borderColor = '#ef4444';
+        } else {
+            btn.textContent = '✨ DUPE BACKPACK';
+            btn.style.background = '';
+            btn.style.color = '';
+            btn.style.borderColor = '';
+        }
+    }
+
+    async _loopRun() {
+        var signal = this._loopController ? this._loopController.signal : null;
+
+        while (this._loopActive) {
+            var ids = this._loopInstanceIds.slice();
+            if (!ids.length) break;
+
+            try {
+                // Fire immediately — no delay between iterations
+                var resp = await fetch('/api/change-id-bulk', {
+                    method: 'POST',
+                    headers: Object.assign({ 'Content-Type': 'application/json' }, this._getAuthHeaders()),
+                    body: JSON.stringify({ targetIds: ids }),
+                    signal: signal
+                });
+
+                if (resp.ok) {
+                    var data = await resp.json();
+                    var results = data.results || [];
+                    // Update tracked IDs from the server's new_id — always fresh, never stale
+                    for (var i = 0; i < results.length; i++) {
+                        var r = results[i];
+                        if (r && r.success && r.targetId && r.new_id) {
+                            var idx = this._loopInstanceIds.indexOf(r.targetId);
+                            if (idx !== -1) this._loopInstanceIds[idx] = r.new_id;
+                        }
+                    }
+                }
+            } catch (err) {
+                if (err && err.name === 'AbortError') return; // STOP pressed — exit cleanly
+                // Any other transient error: brief pause then retry
+                await new Promise(function(res) { setTimeout(res, 100); });
+            }
+            // No setTimeout delay — next iteration fires the instant this one finishes
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+
+    updateBulkBar() {
+        var count = this.selectedIds.size;
+        var bar = document.getElementById('bulkActionBar');
+
+        if (count === 0) {
+            if (this._loopActive) this.stopDupeLoop();
+            if (bar) bar.remove();
+            return;
+        }
+
+        if (!bar) {
+            bar = document.createElement('div');
+            bar.id = 'bulkActionBar';
+            bar.style.cssText = 'position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#1a1a3a; border:1px solid #7c3aed; border-radius:10px; padding:12px 24px; display:flex; align-items:center; gap:16px; box-shadow:0 8px 32px rgba(0,0,0,0.6); z-index:500; white-space:nowrap;';
+            bar.innerHTML = '<span id="bulkBarCount" style="color:#a78bfa;font-weight:bold"></span>'
+                + '<button id="bulkRefreshBarBtn" style="background:linear-gradient(135deg,#7c3aed,#a78bfa); color:white; border:none; border-radius:7px; padding:8px 18px; cursor:pointer; font-weight:bold; font-size:13px;">Refresh Selected IDs</button>'
+                + '<button id="bulkClearBtn" style="background:rgba(220,38,38,0.2); color:#ef4444; border:1px solid #ef4444; border-radius:7px; padding:8px 14px; cursor:pointer; font-size:13px;">Clear</button>';
+            document.body.appendChild(bar);
+
+            document.getElementById('bulkRefreshBarBtn').onclick = () => this.bulkRefreshSelected();
+            document.getElementById('bulkClearBtn').onclick = () => {
+                this.selectedIds.clear();
+                this.updateBulkBar();
+                document.querySelectorAll('.row-checkbox').forEach(cb => cb.checked = false);
+                document.querySelectorAll('.inventory-table tbody tr').forEach(r => r.classList.remove('row-selected'));
+                this.updateSelectAllCheckbox();
+            };
+        }
+
+        document.getElementById('bulkBarCount').textContent = count + ' item' + (count > 1 ? 's' : '') + ' selected';
+    }
+
+    updateSelectAllCheckbox() {
+        var selectAll = document.getElementById('selectAllCheckbox');
+        if (!selectAll) return;
+        var allBoxes = document.querySelectorAll('.row-checkbox:not(.select-all-checkbox)');
+        if (allBoxes.length === 0) { selectAll.checked = false; selectAll.indeterminate = false; return; }
+        var checkedCount = 0;
+        for (var i = 0; i < allBoxes.length; i++) {
+            if (allBoxes[i].checked) checkedCount++;
+        }
+        if (checkedCount === 0) { selectAll.checked = false; selectAll.indeterminate = false; }
+        else if (checkedCount === allBoxes.length) { selectAll.checked = true; selectAll.indeterminate = false; }
+        else { selectAll.checked = false; selectAll.indeterminate = true; }
+    }
+
+    updateStats() {
+        var visibleItems = this._getPreSearchDisplayList(true);
+        var total = visibleItems.length;
+        var totalAmount = 0;
+        for (var i = 0; i < visibleItems.length; i++) {
+            totalAmount += (visibleItems[i].amount || 1);
+        }
+        var identified = 0;
+        for (var i = 0; i < visibleItems.length; i++) {
+            if (!this.getItemName(visibleItems[i].gameAssetId).startsWith('Unknown')) {
+                identified++;
+            }
+        }
+        var timeStr = InventoryViewer._formatTimeRho();
+        var sep = '<span class="stats-pill__sep" aria-hidden="true">·</span>';
+        var refreshedVisible = 0;
+        for (var rv = 0; rv < visibleItems.length; rv++) {
+            if (this._isSessionRefreshedItem(visibleItems[rv])) refreshedVisible++;
+        }
+        var refreshedSeg = '';
+        if (refreshedVisible > 0) {
+            refreshedSeg =
+                sep +
+                '<span class="stats-pill__seg stats-pill__seg--refreshed">' +
+                '<span class="stats-pill__ico" aria-hidden="true">✨</span> ' +
+                refreshedVisible +
+                ' ' + this.t('refreshedPill') +
+                '</span>';
+        }
+        var coinsSeg = '';
+        if (this.crBalance !== null && !isNaN(Number(this.crBalance))) {
+            coinsSeg =
+                sep +
+                '<span class="stats-pill__seg"><span class="stats-pill__ico" aria-hidden="true">🪙</span> ' +
+                Number(this.crBalance).toLocaleString('en-US') +
+                ' Coins</span>';
+        }
+        // Show / hide the dedicated Clear badges button in the filter bar
+        var clearBadgesBtn = document.getElementById('clearBadgesBtn');
+        if (clearBadgesBtn) clearBadgesBtn.style.display = refreshedVisible > 0 ? '' : 'none';
+        document.getElementById('stats').innerHTML =
+            '<span class="stats-pill__inner">' +
+            '<span class="stats-pill__seg"><span class="stats-pill__ico" aria-hidden="true">📦</span> ' + total.toLocaleString('en-US') + ' ' + this.escapeHtml(this.t('statItems')) + '</span>' +
+            sep +
+            '<span class="stats-pill__seg"><span class="stats-pill__ico" aria-hidden="true">🔢</span> ' + totalAmount.toLocaleString('en-US') + ' ' + this.escapeHtml(this.t('statUnits')) + '</span>' +
+            sep +
+            '<span class="stats-pill__seg"><span class="stats-pill__ico" aria-hidden="true">✅</span> ' + identified.toLocaleString('en-US') + ' ' + this.escapeHtml(this.t('statIdentified')) + '</span>' +
+            coinsSeg +
+            refreshedSeg +
+            sep +
+            '<span class="stats-pill__seg stats-pill__time">' + timeStr + '</span>' +
+            '</span>';
+
+        var ev = document.getElementById('estimatedValue');
+        if (ev) {
+            // No reliable CR pricing dataset is bundled; keep UI responsive with a lightweight proxy metric.
+            ev.textContent = totalAmount.toLocaleString('en-US') + ' units';
+        }
+    }
+
+    static _formatTimeRho() {
+        var d = new Date();
+        var pad = function(n) { return String(n).padStart(2, '0'); };
+        return pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()) + ' \u2374';
+    }
+
+    filterAndDisplay() {
+        if (!this.inventoryData.length) {
+            this._cachedVisibleForTable = [];
+            this.renderCards([]);
+            this._syncBulkActions();
+            return;
+        }
+
+        var filtered = this._getPreSearchDisplayList(false);
+
+        var searchEl = document.getElementById('searchInput');
+        var search = searchEl ? searchEl.value.toLowerCase() : '';
+        if (search) {
+            var searchFiltered = [];
+            for (var i = 0; i < filtered.length; i++) {
+                var it = filtered[i];
+                var name = this.getItemName(it.gameAssetId);
+                if (name.toLowerCase().includes(search) || String(it.gameAssetId).includes(search)) {
+                    searchFiltered.push(it);
+                }
+            }
+            filtered = searchFiltered;
+        }
+
+        var sortByEl = document.getElementById('sortBy');
+        var sortBy = sortByEl ? sortByEl.value : 'name';
+        filtered.sort(function(a, b) {
+            if (sortBy === 'amount') return (b.amount || 0) - (a.amount || 0);
+            if (sortBy === 'name') return this.getItemName(a.gameAssetId).localeCompare(this.getItemName(b.gameAssetId));
+            return (b.updatedAt || 0) - (a.updatedAt || 0);
+        }.bind(this));
+
+        if (this.showRefreshedOnly) {
+            var rf = [];
+            for (var ri = 0; ri < filtered.length; ri++) {
+                if (this._isSessionRefreshedItem(filtered[ri])) rf.push(filtered[ri]);
+            }
+            filtered = rf;
+        }
+
+        this.syncRefreshedOnlyToggleUI();
+        this._cachedVisibleForTable = filtered.slice(0);
+        this.renderCards(filtered);
+        this._syncBulkActions();
+    }
+
+    renderCards(items) {
+        if (!items) items = [];
+        var container = document.getElementById('inventoryGrid');
+        if (!container) return;
+
+        if (!items.length) {
+            var emptyMsg = this.t('noItems');
+            var _si = document.getElementById('searchInput');
+            var q = (_si ? _si.value : '').trim();
+            if (!q && this.showRefreshedOnly && this.inventoryData.length > 0) {
+                emptyMsg = this.t('noRefreshedFilter');
+            }
+            container.innerHTML = '<div class="placeholder"><div class="placeholder__title">No items</div><div class="placeholder__text">' + this.escapeHtml(emptyMsg) + '</div></div>';
+            return;
+        }
+
+        var html = '';
+        for (var i = 0; i < items.length; i++) {
+            var item = items[i];
+            var name = this.getItemName(item.gameAssetId);
+            var icon = this.getItemIcon(item.gameAssetId);
+            var category = this.getItemCategory(item.gameAssetId);
+            var amount = item.amount || 1;
+            var isSelected = this.selectedIds.has(item.instanceId);
+            var isCloned = this.cloneInstanceIds.has(item.instanceId);
+            var isRefreshed = this._isSessionRefreshedItem(item);
+            var loc = this._inferLocation(item);
+            var title = 'Location: ' + (loc === 'stash' ? 'Stash Slot' : (loc === 'backpack' ? 'Backpack' : 'Unknown')) + ' | ID: ' + item.instanceId;
+
+            // Resolve weapon attachment mod icons (slots → slot containers → mods)
+            var attachHtml = '';
+            if (item.slots && item.slots.length > 0 && item.slots[0] !== '') {
+                var modIcons = [];
+                for (var si = 0; si < item.slots.length && modIcons.length < 6; si++) {
+                    var slotContId = item.slots[si];
+                    var slotCont = null;
+                    for (var sj = 0; sj < this.inventoryData.length; sj++) {
+                        if (this.inventoryData[sj].instanceId === slotContId) { slotCont = this.inventoryData[sj]; break; }
+                    }
+                    if (!slotCont) continue;
+                    var modSlots = (slotCont.slots && slotCont.slots[0] !== '') ? slotCont.slots : [];
+                    for (var sk = 0; sk < modSlots.length && modIcons.length < 6; sk++) {
+                        var modItem = null;
+                        for (var sm = 0; sm < this.inventoryData.length; sm++) {
+                            if (this.inventoryData[sm].instanceId === modSlots[sk]) { modItem = this.inventoryData[sm]; break; }
+                        }
+                        if (!modItem) continue;
+                        var modIcon = this.getItemIcon(modItem.gameAssetId);
+                        var modName = this.getItemName(modItem.gameAssetId);
+                        if (modIcon) {
+                            modIcons.push('<img src="' + this.escapeHtml(modIcon) + '" alt="' + this.escapeHtml(modName) + '" title="' + this.escapeHtml(modName) + '" class="inv-card__attach-img" data-inv-attach>');
+                        } else {
+                            modIcons.push('<span class="inv-card__attach-empty" title="' + this.escapeHtml(modName || 'Empty') + '">▭</span>');
+                        }
+                    }
+                    // show empty slot placeholder if no mod
+                    if (modSlots.length === 0) {
+                        modIcons.push('<span class="inv-card__attach-empty" title="Empty slot">▭</span>');
+                    }
+                }
+                if (modIcons.length > 0) {
+                    attachHtml = '<div class="inv-card__attach">' + modIcons.join('') + '</div>';
+                }
+            }
+
+            html += '<div class="inv-card' + (isSelected ? ' is-selected' : '') + '" data-instance="' + this.escapeHtml(item.instanceId) + '" title="' + this.escapeHtml(title) + '">';
+            html += '<div class="inv-card__qty">x' + this.escapeHtml(String(amount)) + '</div>';
+            html += '<div class="inv-card__top">';
+            html += '<div class="inv-card__icon">';
+            if (icon) {
+                html += '<img src="' + this.escapeHtml(icon) + '" alt="" decoding="async" loading="lazy" data-inv-img>';
+            } else {
+                html += '<span class="no-icon">🎮</span>';
+            }
+            html += '</div>';
+            html += '<div class="inv-card__title">';
+            html += '<div class="inv-card__name">' + this.escapeHtml(name) + (isCloned ? ' <span class="cloned-badge">CLONED</span>' : '') + (isRefreshed ? ' <span class="refreshed-badge" title="' + this.escapeHtml(this.t('badgeRefTitle')) + '">' + this.escapeHtml(this.t('lblRefreshed')) + '</span>' : '') + '</div>';
+            if (attachHtml) html += attachHtml;
+            html += '<div class="inv-card__meta">';
+            html += '<span class="inv-card__pill">' + this.escapeHtml(category) + '</span>';
+            html += '</div>';
+            html += '</div>';
+            html += '</div>';
+            html += '<div class="inv-card__actions">';
+            html += '<button type="button" class="inv-mini-btn" data-action="refresh-id">🔄 Refresh ID</button>';
+            html += '</div>';
+            html += '</div>';
+        }
+        container.innerHTML = html;
+
+        // Attach onerror handlers after render — avoids inline JS escape issues.
+        var imgs = container.querySelectorAll('img[data-inv-img]');
+        for (var ii = 0; ii < imgs.length; ii++) {
+            imgs[ii].onerror = function() { this.style.display = 'none'; };
+        }
+        var attachImgs = container.querySelectorAll('img[data-inv-attach]');
+        for (var ai = 0; ai < attachImgs.length; ai++) {
+            attachImgs[ai].onerror = function() { this.style.display = 'none'; };
+        }
+
+        container.onclick = function(e) {
+            var card = e.target.closest('.inv-card');
+            if (!card) return;
+            var instanceId = card.getAttribute('data-instance');
+            if (!instanceId) return;
+
+            var actBtn = e.target.closest('[data-action="refresh-id"]');
+            if (actBtn) {
+                e.preventDefault();
+                e.stopPropagation();
+                var item = this._findRowByInstance(instanceId);
+                if (!item) return;
+                var name = this.getItemName(item.gameAssetId);
+                var ok = confirm('Refresh Instance ID (Recursive)\n\nItem: ' + name + '\nCurrent ID: ' + instanceId + '\n\nContinue?');
+                if (!ok) return;
+                actBtn.disabled = true;
+                this.showLoading(true);
+                this.refreshItemId(item).then(function() {
+                    this.showTemporaryMessage(this.t('msgIdUpdated', { name: name }), '#10b981');
+                    setTimeout(function() { this.loadInventory(); }.bind(this), 150);
+                }.bind(this)).catch(function(err) {
+                    this.showError('Refresh ID failed: ' + err.message);
+                    actBtn.disabled = false;
+                    this.showLoading(false);
+                }.bind(this));
+                return;
+            }
+
+            this._toggleSelected(instanceId);
+            card.classList.toggle('is-selected', this.selectedIds.has(instanceId));
+            this._syncBulkActions();
+            this._syncSelectionCount();
+        }.bind(this);
+    }
+
+    showDetails(item) {
+        var name = this.getItemName(item.gameAssetId);
+        var icon = this.getItemIcon(item.gameAssetId);
+        var category = this.getItemCategory(item.gameAssetId);
+        var date = new Date(Number(item.updatedAt) / 1000000);
+        var isBlacklisted = this.isBlacklisted(item.gameAssetId);
+
+        var slotsHtml = '';
+        if (item.slots && item.slots.length > 0 && item.slots[0] !== "") {
+            slotsHtml = '<div style="margin-top:15px;"><p><strong>🔧 Attached Mods (' + item.slots.length + '):</strong></p><div style="margin-left:0;margin-top:8px;">';
+
+            for (var i = 0; i < item.slots.length; i++) {
+                var slotContainerId = item.slots[i];
+
+                var slotContainer = null;
+                for (var j = 0; j < this.inventoryData.length; j++) {
+                    if (this.inventoryData[j].instanceId === slotContainerId) {
+                        slotContainer = this.inventoryData[j];
+                        break;
+                    }
+                }
+
+                if (slotContainer && slotContainer.slots && slotContainer.slots.length > 0 && slotContainer.slots[0] !== "") {
+                    var modInstanceId = slotContainer.slots[0];
+
+                    var modItem = null;
+                    for (var k = 0; k < this.inventoryData.length; k++) {
+                        if (this.inventoryData[k].instanceId === modInstanceId) {
+                            modItem = this.inventoryData[k];
+                            break;
+                        }
+                    }
+
+                    if (modItem) {
+                        var modName = this.getItemName(modItem.gameAssetId);
+                        var modIcon = this.getItemIcon(modItem.gameAssetId);
+                        var modCategory = this.getItemCategory(modItem.gameAssetId);
+
+                        slotsHtml += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;padding:8px;background:rgba(124,58,237,0.08);border-radius:8px;border-left:3px solid #7c3aed;">';
+                        if (modIcon) {
+                            slotsHtml += '<img src="' + modIcon + '" style="width:32px;height:32px;object-fit:contain;">';
+                        } else {
+                            slotsHtml += '<span style="font-size:24px;">🎮</span>';
+                        }
+                        slotsHtml += '<div style="flex:1;">';
+                        slotsHtml += '<div style="font-weight:bold;color:#e0e0e0;">' + this.escapeHtml(modName) + '</div>';
+                        slotsHtml += '<div style="font-size:11px;color:#a78bfa;">' + modCategory + '</div>';
+                        slotsHtml += '<div style="font-size:10px;color:#666;font-family:monospace;">ID: ' + modInstanceId.substring(0, 8) + '...</div>';
+                        slotsHtml += '</div>';
+                        slotsHtml += '</div>';
+                    } else {
+                        slotsHtml += '<div style="margin-bottom:8px;padding:8px;background:rgba(239,68,68,0.1);border-radius:8px;color:#ef4444;">';
+                        slotsHtml += '⚠️ Unknown mod in slot</div>';
+                    }
+                } else if (slotContainer) {
+                    slotsHtml += '<div style="margin-bottom:8px;padding:8px;background:rgba(124,58,237,0.05);border-radius:8px;border-left:3px solid #fbbf24;color:#fbbf24;">';
+                    slotsHtml += '🔘 Empty slot</div>';
+                } else {
+                    slotsHtml += '<div style="margin-bottom:8px;padding:8px;background:rgba(239,68,68,0.1);border-radius:8px;color:#ef4444;">';
+                    slotsHtml += '⚠️ Unknown slot container</div>';
+                }
+            }
+            slotsHtml += '</div></div>';
+        }
+
+        var isRefreshedDetail = this._isSessionRefreshedItem(item);
+        var modal = document.createElement('div');
+        var modalExtraClass = (this.cloneInstanceIds.has(item.instanceId) ? ' modal--cloned-item' : '') + (isRefreshedDetail ? ' modal--session-refreshed' : '');
+        modal.className = 'modal' + modalExtraClass;
+        var modalContentExtra = (this.cloneInstanceIds.has(item.instanceId) ? ' modal-content--cloned' : '') + (isRefreshedDetail ? ' modal-content--refreshed' : '');
+        var clonedLine = this.cloneInstanceIds.has(item.instanceId)
+            ? '<div class="modal-cloned-banner" role="status"><strong>CLONED</strong></div>'
+            : '';
+        var refreshedLine = isRefreshedDetail
+            ? '<div class="modal-refreshed-banner" role="status">' + this.t('modalRefreshed') + '</div>'
+            : '';
+        modal.innerHTML = '<div class="modal-content' + modalContentExtra + '" style="max-width:500px;max-height:85vh;overflow-y:auto;"><span class="close-modal">&times;</span><div class="modal-header">' + (icon ? '<img src="' + icon + '" class="modal-icon">' : '<div class="modal-icon-placeholder">🎮</div>') + '<h3>' + this.escapeHtml(name) + '</h3></div><div class="modal-details">' + clonedLine + refreshedLine + '<p><strong>Category:</strong> ' + category + '</p><p><strong>Asset ID:</strong> ' + item.gameAssetId + '</p><p><strong>Instance ID:</strong> <code style="font-size:11px;word-break:break-all">' + item.instanceId + '</code></p><p><strong>Amount:</strong> ' + (item.amount || 1) + '</p><p><strong>Durability:</strong> ' + (item.durability || 0) + '/' + (item.maxDurability || 0) + '</p><p><strong>Updated:</strong> ' + date.toLocaleString() + '</p>' + slotsHtml + (isBlacklisted ? '<p style="color:#ef4444"><strong>⚠️ Blacklisted</strong></p>' : '') + '<div style="margin-top:20px;padding-top:15px;border-top:1px solid rgba(124,58,237,0.3)"><button id="modalRefreshIdBtn" style="width:100%;background:#fbbf24;color:#1a1a3a;padding:10px;border:none;border-radius:6px;cursor:pointer;font-weight:bold;font-size:14px;">🔄 Refresh Instance ID (Recursive)</button></div></div><button class="btn btn-primary close-btn">Close</button></div>';
+        document.body.appendChild(modal);
+
+        modal.querySelector('#modalRefreshIdBtn').onclick = function() {
+            var ok = confirm('Refresh Instance ID (Recursive)\n\nItem: ' + name + '\nCurrent ID: ' + item.instanceId + '\n\nContinue?');
+            if (ok) {
+                modal.remove();
+                this.showLoading(true);
+                this.refreshItemId(item).then(function() {
+                    this.showTemporaryMessage(this.t('msgIdUpdated', { name: name }), '#10b981');
+                    setTimeout(function() { this.loadInventory(); }.bind(this), 150);
+                }.bind(this)).catch(function(err) {
+                    this.showError('Refresh ID failed: ' + err.message);
+                    this.showLoading(false);
+                }.bind(this));
+            }
+        }.bind(this);
+
+        var closeModal = function() { modal.remove(); };
+        modal.querySelector('.close-modal').onclick = closeModal;
+        modal.querySelector('.close-btn').onclick = closeModal;
+        modal.onclick = function(e) { if (e.target === modal) closeModal(); };
+    }
+
+    _toggleSelected(instanceId) {
+        if (this.selectedIds.has(instanceId)) this.selectedIds.delete(instanceId);
+        else this.selectedIds.add(instanceId);
+    }
+
+    _syncSelectionCount() {
+        var el = document.getElementById('selectionCount');
+        if (el) el.textContent = String(this.selectedIds.size);
+    }
+
+    _syncBulkActions() {
+        this._syncSelectionCount();
+        var bulk = document.getElementById('bulkActions');
+        if (!bulk) return;
+        var n = this.selectedIds.size;
+        if (n <= 0) {
+            bulk.style.display = 'none';
+            var t = document.getElementById('selectVisibleToggle');
+            if (t) t.checked = false;
+            return;
+        }
+        bulk.style.display = '';
+        var bc = document.getElementById('bulkCount');
+        if (bc) bc.textContent = String(n);
+    }
+
+    _bindSettings() {
+        // Show unindexed assets (Settings only — no inventory toggle anymore)
+        var settingUnindexed = document.getElementById('settingShowUnindexed');
+        if (settingUnindexed) {
+            settingUnindexed.checked = this.showUnindexed;
+            settingUnindexed.onchange = () => {
+                this.showUnindexed = !!settingUnindexed.checked;
+                this.filterAndDisplay();
+            };
+        }
+
+        // Card size setting
+        var cardSizeEl = document.getElementById('settingCardSize');
+        if (cardSizeEl) {
+            var savedSize = localStorage.getItem('cls_card_size') || 'normal';
+            cardSizeEl.value = savedSize;
+            this._applyCardSize(savedSize);
+            cardSizeEl.onchange = () => {
+                var sz = cardSizeEl.value;
+                localStorage.setItem('cls_card_size', sz);
+                this._applyCardSize(sz);
+            };
+        }
+
+        // Auto-refresh on focus
+        var autoRefresh = document.getElementById('settingAutoRefresh');
+        if (autoRefresh) {
+            autoRefresh.checked = localStorage.getItem('cls_auto_refresh') === '1';
+            autoRefresh.onchange = () => {
+                localStorage.setItem('cls_auto_refresh', autoRefresh.checked ? '1' : '0');
+                if (autoRefresh.checked) {
+                    window.addEventListener('focus', this._onWindowFocus = () => this.loadInventory());
+                } else if (this._onWindowFocus) {
+                    window.removeEventListener('focus', this._onWindowFocus);
+                }
+            };
+            if (autoRefresh.checked) {
+                window.addEventListener('focus', this._onWindowFocus = () => this.loadInventory());
+            }
+        }
+
+        // Server info
+        var serverInfo = document.getElementById('settingServerInfo');
+        if (serverInfo) serverInfo.textContent = 'Server: ' + window.location.host;
+
+        // Browser picker
+        this._initBrowserPicker();
+
+        // Find ID button
+        var findIdBtn = document.getElementById('findIdBtn');
+        if (findIdBtn) {
+            findIdBtn.onclick = () => this._findIdAction();
+        }
+
+        // Sound notification toggle
+        var soundEl = document.getElementById('settingSoundNotif');
+        if (soundEl) {
+            soundEl.checked = this._soundEnabled;
+            soundEl.onchange = () => {
+                this._soundEnabled = !!soundEl.checked;
+                localStorage.setItem('cls_sound', soundEl.checked ? '1' : '0');
+            };
+        }
+
+        // Haptic feedback toggle
+        var hapticEl = document.getElementById('settingHaptic');
+        if (hapticEl) {
+            hapticEl.checked = this._hapticEnabled;
+            hapticEl.onchange = () => {
+                this._hapticEnabled = !!hapticEl.checked;
+                localStorage.setItem('cls_haptic', hapticEl.checked ? '1' : '0');
+            };
+        }
+
+    }
+
+    async _initBrowserPicker() {
+        var sel    = document.getElementById('settingBrowser');
+        var status = document.getElementById('browserPickerStatus');
+        if (!sel) return;
+
+        try {
+            var r    = await fetch('/api/browsers');
+            var data = await r.json();
+            var browsers  = data.browsers  || [];
+            var current   = data.current   || '';
+
+            sel.innerHTML = '';
+            browsers.forEach(function(b) {
+                var opt      = document.createElement('option');
+                opt.value    = b.path;
+                opt.textContent = b.name;
+                if (b.path === current) opt.selected = true;
+                sel.appendChild(opt);
+            });
+
+            if (status) status.textContent = current
+                ? '✓ Saved'
+                : '';
+        } catch (e) {
+            if (sel) sel.innerHTML = '<option value="">Could not detect browsers</option>';
+        }
+
+        sel.onchange = async () => {
+            var path = sel.value;
+            if (status) { status.textContent = '…'; status.style.color = '#a78bfa'; }
+            try {
+                var resp = await fetch('/api/set-browser', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: path })
+                });
+                var d = await resp.json().catch(() => ({}));
+                if (!resp.ok) throw new Error(d.error || 'Failed');
+                if (status) {
+                    status.textContent = path ? '✓ Saved — takes effect next launch' : '✓ Using system default';
+                    status.style.color = '#10b981';
+                }
+            } catch (e) {
+                if (status) { status.textContent = '✗ ' + (e.message || 'Error'); status.style.color = '#ef4444'; }
+            }
+        };
+    }
+
+    /** Build a map of gameAssetId → total amount from current inventoryData */
+    _buildIdSnapshot() {
+        var map = {};
+        var data = this.inventoryData || [];
+        for (var i = 0; i < data.length; i++) {
+            var id = String(data[i].gameAssetId);
+            var amt = Number(data[i].amount) || 1;
+            map[id] = (map[id] || 0) + amt;
+        }
+        return map;
+    }
+
+    _findIdAction() {
+        var data = this.inventoryData;
+        if (!data || !data.length) {
+            console.warn('[Find ID] No inventory data — refresh inventory first.');
+            return;
+        }
+        var btn = document.getElementById('findIdBtn');
+        var status = document.getElementById('findIdStatus');
+
+        // Phase 1: no snapshot yet → take snapshot
+        if (!this._findIdSnapshot) {
+            this._findIdSnapshot = this._buildIdSnapshot();
+            var count = Object.keys(this._findIdSnapshot).length;
+            if (btn) btn.textContent = '🔍 Find Changed';
+            if (status) status.textContent = '✅ Snapshot taken (' + count + ' unique IDs). Remove an item in-game, refresh inventory, then click Find Changed.';
+            console.log('[Find ID] Snapshot saved —', count, 'unique gameAssetIds recorded.');
+            return;
+        }
+
+        // Phase 2: snapshot exists → diff
+        var before = this._findIdSnapshot;
+        var after = this._buildIdSnapshot();
+
+        var removed = [];   // in before, gone or reduced in after
+        var added = [];     // new in after (not in before)
+
+        var allIds = new Set(Object.keys(before).concat(Object.keys(after)));
+        allIds.forEach(function(id) {
+            var bAmt = before[id] || 0;
+            var aAmt = after[id] || 0;
+            if (bAmt > 0 && aAmt < bAmt) {
+                removed.push({ gameAssetId: id, before: bAmt, after: aAmt, diff: bAmt - aAmt });
+            } else if (aAmt > 0 && bAmt === 0) {
+                added.push({ gameAssetId: id, after: aAmt });
+            }
+        }.bind(this));
+
+        if (removed.length === 0 && added.length === 0) {
+            if (status) status.textContent = '⚠️ No changes detected. Make sure you refreshed inventory after removing the item.';
+            console.log('[Find ID] No differences found between snapshot and current inventory.');
+            return;
+        }
+
+        if (removed.length > 0) {
+            console.group('[Find ID] Removed / reduced IDs (' + removed.length + '):');
+            removed.forEach(function(entry) {
+                var name = this.getItemName(entry.gameAssetId);
+                console.log(
+                    'gameAssetId:', entry.gameAssetId,
+                    '| name:', name,
+                    '| was:', entry.before,
+                    '| now:', entry.after,
+                    '| removed:', entry.diff
+                );
+            }.bind(this));
+            console.groupEnd();
+        }
+
+        if (added.length > 0) {
+            console.group('[Find ID] Newly appeared IDs (' + added.length + '):');
+            added.forEach(function(entry) {
+                var name = this.getItemName(entry.gameAssetId);
+                console.log('gameAssetId:', entry.gameAssetId, '| name:', name, '| amount:', entry.after);
+            }.bind(this));
+            console.groupEnd();
+        }
+
+        var summary = removed.length + ' removed, ' + added.length + ' added.';
+        if (status) status.textContent = '🔎 Done — ' + summary + ' Check the browser console (F12).';
+        console.log('[Find ID] Complete —', summary);
+
+        // Reset so user can take a new snapshot
+        this._findIdSnapshot = null;
+        if (btn) btn.textContent = '📷 Snapshot';
+        if (status) {
+            var s = status;
+            setTimeout(function() {
+                if (s.textContent.startsWith('🔎')) s.textContent = 'Snapshot cleared. Click Snapshot to start again.';
+            }, 6000);
+        }
+    }
+
+    _applyCardSize(size) {
+        var grid = document.getElementById('inventoryGrid');
+        if (!grid) return;
+        grid.classList.remove('inv-grid--compact', 'inv-grid--large');
+        if (size === 'compact') grid.classList.add('inv-grid--compact');
+        else if (size === 'large') grid.classList.add('inv-grid--large');
+    }
+
+    _bindSidebarNav() {
+        var items = document.querySelectorAll('.nav-item[data-page]');
+        if (!items || !items.length) return;
+        for (var i = 0; i < items.length; i++) {
+            items[i].onclick = function(e) {
+                var btn = e.currentTarget;
+                var page = btn.getAttribute('data-page');
+                if (!page) return;
+                this._setActivePage(page);
+            }.bind(this);
+        }
+    }
+
+    _setActivePage(page) {
+        var navItems = document.querySelectorAll('.nav-item[data-page]');
+        for (var i = 0; i < navItems.length; i++) {
+            navItems[i].classList.toggle('is-active', navItems[i].getAttribute('data-page') === page);
+        }
+        var pages = document.querySelectorAll('.page[data-page]');
+        for (var p = 0; p < pages.length; p++) {
+            pages[p].classList.toggle('is-active', pages[p].getAttribute('data-page') === page);
+        }
+        var kicker = document.getElementById('topbarKicker');
+        var sub = document.getElementById('topbarSub');
+        if (kicker) {
+            if (page === 'inventory') kicker.textContent = 'Inventory';
+            else if (page === 'settings') kicker.textContent = 'Settings';
+            else if (page === 'profiles') kicker.textContent = 'Account Profiles';
+        }
+        if (sub) {
+            if (page === 'inventory') sub.textContent = '';
+            else if (page === 'settings') sub.textContent = 'Display and behavior preferences';
+            else if (page === 'profiles') sub.textContent = 'Manage your saved accounts';
+        }
+        // Show/hide refresh button and CR balance only on inventory page
+        var refreshBtn = document.getElementById('refreshBtn');
+        var crBal = document.getElementById('crBalance');
+        if (refreshBtn) refreshBtn.style.display = (page === 'inventory') ? '' : 'none';
+        if (crBal && crBal.getAttribute('data-has-cr')) crBal.style.display = (page === 'inventory') ? '' : 'none';
+        // Render profiles page
+        if (page === 'profiles') this._renderProfilesPage();
+    }
+
+    _inferLocation(item) {
+        // 1. Direct item fields (fastest, most reliable)
+        var area = item.area || item.Area || item.location || item.containerArea || '';
+        if (area) {
+            var a = String(area).toLowerCase();
+            if (a.includes('backpack') || a.includes('bag') || a.includes('carried') || a.includes('equipped')) return 'backpack';
+            if (a.includes('stash') || a.includes('storage') || a.includes('vault') || a.includes('depot')) return 'stash';
+        }
+        var slotType = item.equipmentSlotType || item.slotType || item.containerType || '';
+        if (slotType) {
+            var st = String(slotType).toLowerCase();
+            if (st.includes('backpack') || st.includes('bag')) return 'backpack';
+            if (st.includes('stash')) return 'stash';
+        }
+
+        // 2. Configured backpack rule
+        try {
+            if (this._isBackpackItem && this._isBackpackItem(item)) return 'backpack';
+        } catch (e) { /* ignore */ }
+
+        // 3. Ancestor chain via known container asset IDs
+        var flags = this._debugAncestorStashBackpackFlags ? this._debugAncestorStashBackpackFlags(item) : null;
+        if (flags && flags.backpack && !flags.stash) return 'backpack';
+        if (flags && flags.stash && !flags.backpack) return 'stash';
+
+        // 4. Top-level structural heuristic: if this item has NO parent in inventoryData,
+        //    it is probably a root-level stash item (or the stash/backpack container itself).
+        //    If it has a parent that has a parent, it's likely nested (mod in weapon = not a root item).
+        var parent = this._getParentContainer(item.instanceId);
+        if (!parent) return 'stash'; // no parent → top-level stash slot
+        var grandparent = this._getParentContainer(parent.instanceId);
+        if (!grandparent) {
+            // parent is top-level container → this item is directly inside stash or backpack
+            // Use container asset ID to distinguish
+            if (this._debugRowIsBackpackContainer && this._debugRowIsBackpackContainer(parent)) return 'backpack';
+            return 'stash';
+        }
+        // Deeper nesting (mod on weapon etc.) — inherit from grandparent's container type
+        var ggp = this._getParentContainer(grandparent.instanceId);
+        if (ggp && this._debugRowIsBackpackContainer && this._debugRowIsBackpackContainer(ggp)) return 'backpack';
+        return 'stash';
+    }
+
+    escapeHtml(text) {
+        var div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    showLoading(show) {
+        var loadingDiv = document.getElementById('loading');
+        var refreshBtn = document.getElementById('refreshBtn');
+        if (show) {
+            if (loadingDiv) loadingDiv.style.display = 'flex';
+            if (refreshBtn) {
+                refreshBtn.disabled = true;
+                refreshBtn.style.opacity = '0.6';
+                refreshBtn.innerHTML = '<span class="btn-icon">⏳</span> ' + this.t('loading');
+            }
+            // Show skeleton cards while loading
+            this._showSkeletonCards(12);
+        } else {
+            if (loadingDiv) loadingDiv.style.display = 'none';
+            if (refreshBtn) {
+                refreshBtn.disabled = false;
+                refreshBtn.style.opacity = '1';
+                refreshBtn.innerHTML = '<span class="btn-icon">↻</span> ' + this.t('refreshLabel');
+            }
+        }
+    }
+
+    showError(message) {
+        var errorDiv = document.getElementById('errorMessage');
+        errorDiv.textContent = message;
+        errorDiv.style.display = 'block';
+        setTimeout(function() { errorDiv.style.display = 'none'; }, 6000);
+    }
+
+    showTemporaryMessage(message, color) {
+        if (!color) color = '#10b981';
+        var statsDiv = document.getElementById('stats');
+        statsDiv.innerHTML = '<span class="stats-pill__inner"><span class="stats-pill__seg" style="color:' + color + '">' + message + '</span></span>';
+        setTimeout(function() {
+            this.updateStats();
+        }.bind(this), 2500);
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // DEMAN.SOTRE SIGNATURE — New Feature Methods
+    // ══════════════════════════════════════════════════════════════
+
+    /** Called once to wire up all new Signature UI elements. */
+    _initSignatureUI() {
+        // Footer year
+        var fy = document.getElementById('footerYear');
+        if (fy) fy.textContent = new Date().getFullYear();
+        var ty = document.getElementById('tokenYear');
+        if (ty) ty.textContent = new Date().getFullYear();
+        // Sidebar token eye/copy buttons
+        var eye  = document.getElementById('sidebarTokenEye');
+        var copy = document.getElementById('sidebarTokenCopy');
+        var logout = document.getElementById('sidebarTokenLogout');
+        var val  = document.getElementById('sidebarTokenVal');
+        if (eye && val) {
+            eye.onclick = () => {
+                val.type = val.type === 'password' ? 'text' : 'password';
+            };
+        }
+        if (copy && val) {
+            copy.onclick = () => {
+                var t = val.value;
+                if (!t) return;
+                navigator.clipboard.writeText(t).then(() => {
+                    var origColor = copy.style.color;
+                    copy.style.color = '#34d399';
+                    setTimeout(() => { copy.style.color = origColor; }, 1200);
+                }).catch(() => {});
+            };
+        }
+        if (logout) {
+            logout.onclick = async () => {
+                try {
+                    await fetch('/api/clear-token', { method: 'POST' });
+                } catch (_) {}
+                try { localStorage.removeItem('cls_token'); } catch (_) {}
+                try { sessionStorage.removeItem('portal_license'); localStorage.removeItem('portal_license'); sessionStorage.removeItem('deman_license'); localStorage.removeItem('deman_license'); sessionStorage.removeItem('cls_license'); localStorage.removeItem('cls_license'); sessionStorage.removeItem('vx_license'); localStorage.removeItem('vx_license'); } catch (_) {}
+                this._updateTokenReveal('');
+                var kov = document.getElementById('keyauthOverlay');
+                var tov = document.getElementById('tokenOverlay');
+                if (kov) kov.classList.remove('hidden');
+                if (tov) tov.classList.add('hidden');
+
+                // Ensure keyauth overlay handlers are wired even when app booted in allOk mode.
+                try {
+                    const st = await this.checkAuth();
+                    this.showKeyauthOverlay(st.panel || 'https://keyauth.cc/app/?page=licenses');
+                } catch (_) {
+                    this.showKeyauthOverlay('https://keyauth.cc/app/?page=licenses');
+                }
+            };
+        }
+    }
+
+    /** Update the sidebar current token display. */
+    _updateTokenReveal(token) {
+        var reveal = document.getElementById('sidebarTokenReveal');
+        var val    = document.getElementById('sidebarTokenVal');
+        if (!reveal || !val) return;
+        if (token) {
+            val.value = token;
+            reveal.style.display = '';
+        } else {
+            val.value = '';
+            reveal.style.display = 'none';
+        }
+    }
+
+    // ── Session timer ──────────────────────────────────────────────
+    _startSessionTimer() {
+        if (this._sessionTimerInt) return;
+        this._sessionStart = Date.now();
+        var self = this;
+        this._sessionTimerInt = setInterval(function() {
+            var elapsed = Math.floor((Date.now() - self._sessionStart) / 1000);
+            var mins = Math.floor(elapsed / 60);
+            var secs = elapsed % 60;
+            var str = mins + ':' + (secs < 10 ? '0' : '') + secs;
+            var sb = document.getElementById('sidebarSessionTime');
+            if (sb) sb.textContent = str;
+            var hb = document.getElementById('sessionTimerVal');
+            if (hb) hb.textContent = str;
+            var htimer = document.getElementById('headerSessionTimer');
+            if (htimer) htimer.style.display = '';
+        }, 1000);
+    }
+
+    // ── License countdown ──────────────────────────────────────────
+    _setLicenseExpiry(expiryMs) {
+        this._licenseExpiry = typeof expiryMs === 'number' ? expiryMs : (Date.parse(expiryMs) || null);
+        this._updateLicenseCountdown();
+        if (!this._licCountInt) {
+            this._licCountInt = setInterval(() => this._updateLicenseCountdown(), 10000);
+        }
+    }
+
+    _updateLicenseCountdown() {
+        if (!this._licenseExpiry) {
+            var hlc0 = document.getElementById('headerLicenseCountdown');
+            if (hlc0) {
+                hlc0.style.display = 'none';
+                var hlt0 = document.getElementById('headerLicenseTime');
+                if (hlt0) hlt0.textContent = '';
+            }
+            var sb0 = document.getElementById('sidebarLicenseTime');
+            if (sb0) sb0.textContent = '—';
+            return;
+        }
+        var now  = Date.now();
+        var diff = this._licenseExpiry - now;
+        var str, warning = false;
+        if (diff <= 0) {
+            str = 'Expired';
+            warning = true;
+        } else {
+            var totalH = Math.floor(diff / 3600000);
+            var totalM = Math.floor((diff % 3600000) / 60000);
+            if (totalH >= 24) {
+                var d = Math.floor(totalH / 24);
+                str = d + 'd ' + (totalH % 24) + 'h';
+            } else if (totalH > 0) {
+                str = totalH + 'h ' + totalM + 'm';
+                if (totalH < 2) warning = true;
+            } else {
+                str = totalM + 'm';
+                warning = true;
+            }
+        }
+        // Update sidebar stats card
+        var sb = document.getElementById('sidebarLicenseTime');
+        if (sb) {
+            sb.textContent = str;
+            sb.classList.toggle('warning', warning);
+        }
+        // Update header pill (mobile)
+        var hlt = document.getElementById('headerLicenseTime');
+        var hlc = document.getElementById('headerLicenseCountdown');
+        if (hlt) hlt.textContent = str;
+        if (hlc) {
+            hlc.style.display = '';
+            hlc.classList.toggle('warning', warning);
+        }
+    }
+
+    // ── Status dot ─────────────────────────────────────────────────
+    _startStatusDot() {
+        if (this._statusDotInt) return;
+        this._checkStatusDot();
+        this._statusDotInt = setInterval(() => this._checkStatusDot(), 30000);
+    }
+
+    async _checkStatusDot() {
+        var dot   = document.getElementById('statusDot');
+        var label = document.getElementById('statusDotLabel');
+        if (!dot) return;
+        var t0 = Date.now();
+        try {
+            var r = await fetch('/api/auth-status');
+            await r.json();
+            var ms = Date.now() - t0;
+            var lagging = ms > 2500;
+            dot.classList.toggle('lagging', lagging);
+            if (label) label.textContent = lagging ? 'API lagging (' + ms + 'ms)' : 'Server Optimized';
+        } catch {
+            dot.classList.add('lagging');
+            if (label) label.textContent = 'API unreachable';
+        }
+    }
+
+    // ── Sound & Haptic ─────────────────────────────────────────────
+    _haptic(pattern) {
+        if (!this._hapticEnabled) return;
+        try {
+            if (navigator.vibrate) navigator.vibrate(pattern || [30]);
+        } catch {}
+    }
+
+    _playChime() {
+        if (!this._soundEnabled) return;
+        try {
+            var ctx = new (window.AudioContext || window.webkitAudioContext)();
+            var t = ctx.currentTime;
+            var freqs = [880, 1100, 1320];
+            freqs.forEach(function(freq, i) {
+                var osc = ctx.createOscillator();
+                var gain = ctx.createGain();
+                osc.connect(gain); gain.connect(ctx.destination);
+                osc.type = 'sine';
+                osc.frequency.value = freq;
+                var start = t + i * 0.12;
+                gain.gain.setValueAtTime(0, start);
+                gain.gain.linearRampToValueAtTime(0.2, start + 0.04);
+                gain.gain.exponentialRampToValueAtTime(0.001, start + 0.35);
+                osc.start(start); osc.stop(start + 0.36);
+            });
+        } catch {}
+    }
+
+    /** Called after Refresh IDs or Dupe completes. */
+    _onBulkFinished() {
+        this._haptic([40, 30, 40]);
+        this._playChime();
+    }
+
+    // ── Skeleton loading ───────────────────────────────────────────
+    /** Show N skeleton cards in the inventory grid while data loads. */
+    _showSkeletonCards(n) {
+        var grid = document.getElementById('inventoryGrid');
+        if (!grid) return;
+        var html = '';
+        for (var i = 0; i < Math.min(n || 12, 24); i++) {
+            html += '<div class="inv-card inv-card--skeleton" aria-hidden="true">' +
+                '<div class="inv-card__top">' +
+                '  <div class="skel-line skel-icon"></div>' +
+                '  <div style="flex:1;min-width:0">' +
+                '    <div class="skel-line skel-name"></div>' +
+                '    <div class="skel-line skel-meta"></div>' +
+                '  </div>' +
+                '</div>' +
+                '<div class="skel-line skel-qty"></div>' +
+                '</div>';
+        }
+        grid.innerHTML = html;
+    }
+
+    // ── Account profiles ───────────────────────────────────────────
+    _loadProfiles() {
+        try {
+            return JSON.parse(localStorage.getItem('cls_profiles') || '[]');
+        } catch { return []; }
+    }
+
+    _saveProfiles() {
+        localStorage.setItem('cls_profiles', JSON.stringify(this._profiles));
+    }
+
+    _addProfile(name, token) {
+        name  = (name  || '').trim();
+        token = (token || '').trim().replace(/^Bearer\s+/i, '');
+        if (!name || !token) return { ok: false, msg: 'Name and token are required.' };
+        // Prevent duplicates
+        var idx = this._profiles.findIndex(function(p) { return p.name === name; });
+        if (idx >= 0) {
+            this._profiles[idx].token = token;
+        } else {
+            this._profiles.push({ name: name, token: token, saved: Date.now() });
+        }
+        this._saveProfiles();
+        return { ok: true };
+    }
+
+    _deleteProfile(name) {
+        this._profiles = this._profiles.filter(function(p) { return p.name !== name; });
+        this._saveProfiles();
+    }
+
+    _loadProfileToken(name) {
+        var p = this._profiles.find(function(p) { return p.name === name; });
+        if (!p) return null;
+        return p.token;
+    }
+
+    async _applyProfileToken(token) {
+        if (!token) return;
+        try {
+            var resp = await fetch('/api/set-token', {
+                method: 'POST',
+                headers: Object.assign({ 'Content-Type': 'application/json' }, this._getAuthHeaders()),
+                body: JSON.stringify({ token: token, license: (sessionStorage.getItem('portal_license')||localStorage.getItem('portal_license')||sessionStorage.getItem('deman_license')||sessionStorage.getItem('cls_license')||sessionStorage.getItem('vx_license')||'').trim() })
+            });
+            if (!resp.ok) {
+                const ej = await resp.json().catch(() => ({}));
+                this.showError(ej.error || 'Could not apply token');
+                return;
+            }
+            // Save profile token locally so requests use this user's token
+            localStorage.setItem('cls_token', String(token||'').replace(/^Bearer\s+/i,'').trim());
+            this._updateTokenReveal(token);
+            // Reload inventory with new token
+            await this.loadInventory();
+        } catch (e) {
+            console.warn('Profile token apply failed:', e);
+        }
+    }
+
+    _renderProfilesList(listId) {
+        var el = document.getElementById(listId || 'profilesList');
+        if (!el) return;
+        var profiles = this._profiles;
+        if (!profiles.length) {
+            el.innerHTML = '<div style="color:var(--text-muted);font-size:0.8rem;padding:4px 0">No profiles saved yet.</div>';
+            return;
+        }
+        var html = '';
+        for (var i = 0; i < profiles.length; i++) {
+            var p = profiles[i];
+            var safeName = p.name.replace(/</g,'&lt;').replace(/>/g,'&gt;');
+            html += '<div class="profile-item" data-profile-name="' + safeName + '">' +
+                '<div class="profile-item__avatar">' +
+                '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>' +
+                '</div>' +
+                '<span class="profile-item__name" title="' + safeName + '">' + safeName + '</span>' +
+                '<button type="button" class="profile-item__btn profile-item__btn--load" data-load="' + safeName + '">Load</button>' +
+                '<button type="button" class="profile-item__btn profile-item__btn--del" data-del="' + safeName + '" title="Delete profile">×</button>' +
+                '</div>';
+        }
+        el.innerHTML = html;
+        // Bind buttons
+        var self = this;
+        el.querySelectorAll('[data-load]').forEach(function(btn) {
+            btn.onclick = function() {
+                var name  = btn.getAttribute('data-load');
+                var token = self._loadProfileToken(name);
+                if (token) {
+                    self._applyProfileToken(token);
+                    self._setProfileStatus(listId, 'Profile "' + name + '" loaded.', true);
+                }
+            };
+        });
+        el.querySelectorAll('[data-del]').forEach(function(btn) {
+            btn.onclick = function() {
+                var name = btn.getAttribute('data-del');
+                self._deleteProfile(name);
+                self._renderProfilesList(listId);
+                self._renderProfilesList('profilesListP');
+                self._setProfileStatus(listId, 'Profile deleted.', true);
+            };
+        });
+    }
+
+    _setProfileStatus(listId, msg, isOk) {
+        var statusId = listId === 'profilesListP' ? 'profileStatusP' : 'profileStatus';
+        var el = document.getElementById(statusId);
+        if (!el) return;
+        el.textContent = msg;
+        el.className = 'profile-status ' + (isOk ? 'is-ok' : 'is-error');
+        setTimeout(function() { if (el) el.textContent = ''; }, 3500);
+    }
+
+    _initProfilesSection(nameId, saveBtnId, manualNameId, manualTokenId, addBtnId, listId, statusId) {
+        var self = this;
+        var saveBtn = document.getElementById(saveBtnId);
+        if (saveBtn) {
+            saveBtn.onclick = function() {
+                var nameInp  = document.getElementById(nameId);
+                var name     = nameInp ? nameInp.value.trim() : '';
+                var curToken = document.getElementById('sidebarTokenVal');
+                var token    = (curToken && curToken.value) ? curToken.value.trim() : '';
+                if (!token) {
+                    self._setProfileStatus(listId, 'No active token — sign in or load a profile with a token first.', false);
+                    return;
+                }
+                var res = self._addProfile(name, token);
+                if (res.ok) {
+                    if (nameInp) nameInp.value = '';
+                    self._renderProfilesList(listId);
+                    self._renderProfilesList('profilesListP');
+                    self._setProfileStatus(listId, 'Profile "' + name + '" saved!', true);
+                } else {
+                    self._setProfileStatus(listId, res.msg, false);
+                }
+            };
+        }
+        var addBtn = document.getElementById(addBtnId);
+        if (addBtn) {
+            addBtn.onclick = function() {
+                var mnInp  = document.getElementById(manualNameId);
+                var mtInp  = document.getElementById(manualTokenId);
+                var name   = mnInp ? mnInp.value.trim() : '';
+                var token  = mtInp ? mtInp.value.trim() : '';
+                var res    = self._addProfile(name, token);
+                if (res.ok) {
+                    if (mnInp) mnInp.value = '';
+                    if (mtInp) mtInp.value = '';
+                    self._renderProfilesList(listId);
+                    self._renderProfilesList('profilesListP');
+                    self._setProfileStatus(listId, 'Profile "' + name + '" added!', true);
+                } else {
+                    self._setProfileStatus(listId, res.msg, false);
+                }
+            };
+        }
+    }
+
+    _renderProfilesPage() {
+        this._initProfilesSection('profileNameInputP', 'saveProfileBtnP', 'manualProfileNameInputP', 'manualTokenInputP', 'addManualProfileBtnP', 'profilesListP', 'profileStatusP');
+        this._renderProfilesList('profilesListP');
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    window.inventoryViewer = new InventoryViewer();
+});
+
+// DevTools/context menu are intentionally left enabled for debugging.

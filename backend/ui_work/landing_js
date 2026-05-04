@@ -1,0 +1,394 @@
+(function () {
+    'use strict';
+
+    const $ = function (id) { return document.getElementById(id); };
+
+    const LABELS = {
+        steam: 'Steam',
+        epic: 'Epic Games',
+        xbox: 'Xbox',
+        playstation: 'PlayStation',
+    };
+
+    let oauthRunning = false;
+    let sessionLicense = '';
+    let accountSession = '';
+
+    function _asciiSafeHeaderValue(v) {
+        return String(v || '').replace(/[\u0080-\uFFFF]/g, '').replace(/[\r\n]/g, '').trim();
+    }
+
+    function getOrCreateDeviceId() {
+        try {
+            var d = localStorage.getItem('deman_device_id') || '';
+            d = String(d || '').trim();
+            if (!d) {
+                d = (Math.random().toString(36).slice(2) + Date.now().toString(36) + Math.random().toString(36).slice(2)).slice(0, 40);
+                localStorage.setItem('deman_device_id', d);
+            }
+            return _asciiSafeHeaderValue ? _asciiSafeHeaderValue(d) : d;
+        } catch (_) { return ''; }
+    }
+
+    function getAccountHeaders() {
+        var h = {};
+        var t = (accountSession || localStorage.getItem('deman_account_session') || '').trim();
+        if (t) h['Authorization'] = 'Bearer ' + t;
+        return h;
+    }
+
+    async function checkAccountMe() {
+        try {
+            const r = await fetch('/api/account/me', { headers: getAccountHeaders() });
+            if (!r.ok) return false;
+            const j = await r.json().catch(function(){return {};});
+            return !!(j && j.ok);
+        } catch (_) { return false; }
+    }
+
+    async function registerAccount() {
+        const u = ($('landAccountUser').value || '').trim();
+        const pw = ($('landAccountPass').value || '').trim();
+        const e = $('landAccountError');
+        if (!u || !pw) { showErr(e, 'Enter username and password.'); return; }
+        const r = await fetch('/api/account/register', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({username:u,password:pw})});
+        const j = await r.json().catch(function(){return {};});
+        if (!r.ok) { showErr(e, j.error || 'Register failed'); return; }
+        showErr(e, 'Registered ✅ now click Login');
+    }
+
+    async function loginAccount() {
+        const u = ($('landAccountUser').value || '').trim();
+        const pw = ($('landAccountPass').value || '').trim();
+        const e = $('landAccountError');
+        if (!u || !pw) { showErr(e, 'Enter username and password.'); return; }
+        const r = await fetch('/api/account/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({username:u,password:pw})});
+        const j = await r.json().catch(function(){return {};});
+        if (!r.ok || !j.session || !j.session.token) { showErr(e, j.error || 'Login failed'); return; }
+        accountSession = String(j.session.token);
+        try { localStorage.setItem('deman_account_session', accountSession); } catch (_) {}
+        showErr(e, '');
+        await init();
+    }
+
+    function getAuthHeaders() {
+        var h = {};
+        try {
+            var tok = _asciiSafeHeaderValue(localStorage.getItem('deman_token') || '');
+            var lic = _asciiSafeHeaderValue((localStorage.getItem('deman_license') || sessionStorage.getItem('deman_license')) || sessionLicense || '');
+            if (tok) h['X-User-Token'] = tok;
+            if (lic) h['X-User-License'] = lic;
+            var did = getOrCreateDeviceId();
+            if (did) h['X-Device-Id'] = did;
+            var at = _asciiSafeHeaderValue(accountSession || localStorage.getItem('deman_account_session') || '');
+            if (at) h['Authorization'] = 'Bearer ' + at;
+        } catch (_) {}
+        return h;
+    }
+
+    function goApp() {
+        var m = $('landRedirectMsg');
+        if (m) m.classList.remove('hidden');
+        window.location.href = '/app';
+    }
+
+    async function checkAuth() {
+        try {
+            const r = await fetch('/api/auth-status', { headers: getAuthHeaders() });
+            const j = await r.json();
+            const panel = j.keyauth_panel || 'https://keyauth.cc/app/?page=licenses';
+            const keyauthRequired = !!j.keyauth_required;
+            const keyauth = keyauthRequired ? !!j.keyauth : true;
+            const token = !!j.token;
+            const allOk = !!j.ok && keyauth && token;
+            return { allOk, keyauthRequired, keyauth, token, panel };
+        } catch {
+            return {
+                allOk: false,
+                keyauthRequired: false,
+                keyauth: false,
+                token: false,
+                panel: 'https://keyauth.cc/app/?page=licenses',
+            };
+        }
+    }
+
+    function showErr(el, msg) {
+        if (!el) return;
+        el.textContent = msg || '';
+        el.classList.toggle('is-visible', !!msg);
+    }
+
+    function showModalErr(msg) {
+        var el = $('landOauthModalErr');
+        if (!el) return;
+        el.textContent = msg || '';
+        el.classList.toggle('is-visible', !!msg);
+    }
+
+    function hideOauthModal() {
+        var modal = $('landOauthModal');
+        if (modal) modal.classList.add('hidden');
+        var ta = $('landOauthUrlInput');
+        if (ta) ta.value = '';
+        showModalErr('');
+    }
+
+    async function saveLicense() {
+        const inp = $('landKeyauthInput');
+        const btn = $('landKeyauthSaveBtn');
+        const err = $('landKeyauthError');
+        const raw = (inp && inp.value ? inp.value : '').trim();
+        if (!raw) {
+            showErr(err, 'Enter your license key first.');
+            return;
+        }
+        btn.disabled = true;
+        showErr(err, '');
+        try {
+            let resp = null;
+            let data = {};
+            for (let attempt = 0; attempt < 3; attempt++) {
+                resp = await fetch('/api/set-keyauth-license', {
+                    method: 'POST',
+                    headers: Object.assign({ 'Content-Type': 'application/json' }, getAuthHeaders()),
+                    body: JSON.stringify({ license: raw }),
+                });
+                data = await resp.json().catch(function () { return {}; });
+                if (resp.ok) break;
+                if (![502, 503, 504].includes(resp.status) || attempt === 2) break;
+                await new Promise(function (r) { setTimeout(r, 400 * (attempt + 1)); });
+            }
+            if (!resp.ok) throw new Error(data.error || 'HTTP ' + resp.status);
+            try { localStorage.setItem('deman_license', raw); sessionStorage.setItem('deman_license', raw); } catch (_) {}
+            sessionLicense = String(raw || '').trim();
+            $('landKeyauthBlock').classList.add('hidden');
+            $('landAuthBlock').classList.remove('hidden');
+        } catch (e) {
+            showErr(err, e.message || 'Invalid license key');
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    async function saveToken() {
+        const inp = $('landTokenInput');
+        const btn = $('landTokenSaveBtn');
+        const err = $('landTokenError');
+        const raw = (inp.value || '').trim().replace(/^Bearer\s+/i, '').trim();
+        if (!raw) {
+            showErr(err, 'Enter your token first.');
+            return;
+        }
+        const btnLabel = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = 'Saving…';
+        showErr(err, '');
+        try {
+            const doSetToken = async function () {
+                const resp = await fetch('/api/set-token', {
+                    method: 'POST',
+                    headers: Object.assign({ 'Content-Type': 'application/json' }, getAuthHeaders()),
+                    body: JSON.stringify({ token: raw, license: (sessionLicense || (localStorage.getItem('deman_license') || sessionStorage.getItem('deman_license'))||(localStorage.getItem('cls_license') || sessionStorage.getItem('cls_license'))||'').trim() }),
+                });
+                const data = await resp.json().catch(function () { return {}; });
+                return { resp: resp, data: data };
+            };
+
+            let out = await doSetToken();
+            if (!out.resp.ok && /License required/i.test(String(out.data.error || ''))) {
+                const licTry = ((localStorage.getItem('deman_license') || sessionStorage.getItem('deman_license')) || (localStorage.getItem('cls_license') || sessionStorage.getItem('cls_license')) || '').trim();
+                if (licTry) {
+                    await fetch('/api/set-keyauth-license', {
+                        method: 'POST',
+                        headers: Object.assign({ 'Content-Type': 'application/json' }, getAuthHeaders()),
+                        body: JSON.stringify({ license: licTry }),
+                    }).catch(function () {});
+                    out = await doSetToken();
+                }
+            }
+            if (!out.resp.ok) throw new Error(out.data.error || 'Server error ' + out.resp.status);
+            try { localStorage.setItem('deman_token', raw); } catch (_) {}
+            goApp();
+        } catch (e) {
+            showErr(err, e.message || 'Could not save token.');
+            btn.disabled = false;
+            btn.textContent = btnLabel;
+        }
+    }
+
+    async function startOAuth(provider) {
+        if (oauthRunning) return;
+        const prov = provider || 'xbox';
+        const errEl = $('landTokenError');
+        const help = $('landOauthHelp');
+        const label = LABELS[prov] || prov;
+        const btns = document.querySelectorAll('#landAuthPlatformGrid [data-provider]');
+        oauthRunning = true;
+        btns.forEach(function (b) { b.disabled = true; });
+        if (help) help.classList.add('hidden');
+        showErr(errEl, '');
+        try {
+            const start = await fetch('/api/start-oauth', {
+                method: 'POST',
+                headers: Object.assign({ 'Content-Type': 'application/json' }, getAuthHeaders()),
+                body: JSON.stringify({ provider: prov }),
+            });
+            const startData = await start.json().catch(function () { return {}; });
+            if (start.status === 409) {
+                throw new Error('Login already in progress — wait or cancel and try again.');
+            }
+            if (!start.ok) throw new Error(startData.error || 'HTTP ' + start.status);
+            var authUrl = startData.auth_url;
+            if (!authUrl) throw new Error('Server did not return a sign-in URL.');
+
+            var modal = $('landOauthModal');
+            var link = $('landOauthOpenLink');
+            var ta = $('landOauthUrlInput');
+            var subBtn = $('landOauthSubmitBtn');
+            var canBtn = $('landOauthCancelBtn');
+            if (!modal || !link || !ta || !subBtn || !canBtn) {
+                window.open(authUrl, '_blank', 'noopener,noreferrer');
+                throw new Error('Paste-URL UI missing — open the new tab, copy the redirect URL, and contact support.');
+            }
+            link.href = authUrl;
+            ta.value = '';
+            showModalErr('');
+            modal.classList.remove('hidden');
+
+            var cleanup = function () {
+                hideOauthModal();
+                subBtn.onclick = null;
+                canBtn.onclick = null;
+                var bd = modal.querySelector('[data-close-oauth="1"]');
+                if (bd) bd.onclick = null;
+            };
+
+            canBtn.onclick = function () {
+                fetch('/api/oauth-cancel', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, getAuthHeaders()), body: '{}' }).catch(function () {});
+                cleanup();
+            };
+            var bd = modal.querySelector('[data-close-oauth="1"]');
+            if (bd) {
+                bd.onclick = function () {
+                    fetch('/api/oauth-cancel', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, getAuthHeaders()), body: '{}' }).catch(function () {});
+                    cleanup();
+                };
+            }
+
+            subBtn.onclick = async function () {
+                var pasted = (ta.value || '').trim();
+                if (!pasted) {
+                    showModalErr('Paste the full URL from your browser address bar.');
+                    return;
+                }
+                subBtn.disabled = true;
+                showModalErr('');
+                try {
+                    var ex = await fetch('/api/oauth-submit-redirect', {
+                        method: 'POST',
+                        headers: Object.assign({ 'Content-Type': 'application/json' }, getAuthHeaders()),
+                        body: JSON.stringify({ redirect_url: pasted }),
+                    });
+                    var ej = await ex.json().catch(function () { return {}; });
+                    if (!ex.ok) throw new Error(ej.error || 'HTTP ' + ex.status);
+                    if (ej && ej.token) {
+                        try { localStorage.setItem('deman_token', String(ej.token).replace(/^Bearer\s+/i, '').trim()); } catch (_) {}
+                    }
+                    cleanup();
+                    goApp();
+                } catch (e) {
+                    showModalErr(e.message || 'Could not complete sign-in.');
+                } finally {
+                    subBtn.disabled = false;
+                }
+            };
+        } catch (e) {
+            var msg = e.message || 'OAuth error';
+            var isMs = /different device|authentication method|retry|blocked|sign\.in/i.test(msg);
+            showErr(errEl, isMs && prov === 'xbox' ? 'Microsoft blocked the login. See tips below or paste token.' : msg);
+            if (prov === 'xbox' && (isMs || msg.toLowerCase().indexOf('oauth') !== -1)) {
+                if (help) help.classList.remove('hidden');
+            }
+        } finally {
+            oauthRunning = false;
+            btns.forEach(function (b) { b.disabled = false; });
+        }
+    }
+
+    function wirePlatformGrid() {
+        const root = $('landAuthPlatformGrid');
+        if (!root) return;
+        root.querySelectorAll('[data-provider]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                const p = btn.getAttribute('data-provider');
+                if (p) startOAuth(p);
+            });
+        });
+    }
+
+    async function init() {
+        var y = $('landingYear');
+        if (y) y.textContent = new Date().getFullYear();
+
+        const accBlock = $('landAccountBlock');
+        const keyBlock = $('landKeyauthBlock');
+        const authBlock = $('landAuthBlock');
+
+        // account login disabled: key-only flow
+        if (accBlock) accBlock.classList.add('hidden');
+
+        const st = await checkAuth();
+        if (st.allOk) {
+            goApp();
+            return;
+        }
+
+        if (st.keyauthRequired && !st.keyauth) {
+            keyBlock.classList.remove('hidden');
+            authBlock.classList.add('hidden');
+        } else {
+            keyBlock.classList.add('hidden');
+            authBlock.classList.remove('hidden');
+        }
+
+        $('landKeyauthSaveBtn').onclick = saveLicense;
+        $('landKeyauthInput').onkeydown = function (e) {
+            if (e.key === 'Enter') saveLicense();
+        };
+
+        wirePlatformGrid();
+
+        const tInp = $('landTokenInput');
+        const tBtn = $('landTokenSaveBtn');
+        const eye = $('landTokenEye');
+        tBtn.onclick = saveToken;
+        tInp.onkeydown = function (e) {
+            if (e.key === 'Enter') { e.preventDefault(); saveToken(); }
+        };
+        if (eye) {
+            eye.onclick = function () {
+                tInp.type = tInp.type === 'password' ? 'text' : 'password';
+            };
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+})();
+
+// UI hardening (deterrent only): disable context menu + common devtools shortcuts
+(function () {
+  try {
+    document.addEventListener('contextmenu', function (e) { e.preventDefault(); }, { passive: false });
+    document.addEventListener('keydown', function (e) {
+      var k = (e.key || '').toLowerCase();
+      if (k === 'f12') { e.preventDefault(); return false; }
+      if (e.ctrlKey && e.shiftKey && (k === 'i' || k === 'j' || k === 'c')) { e.preventDefault(); return false; }
+      if ((e.ctrlKey || e.metaKey) && k === 'u') { e.preventDefault(); return false; }
+    }, { passive: false });
+  } catch (_) {}
+})();

@@ -1,0 +1,640 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Consolas', monospace;
+    background: linear-gradient(135deg, #0a0a1a 0%, #0f0f2a 100%);
+    min-height: 100vh;
+    color: #e0e0e0;
+}
+
+@media (max-width: 896px) {
+    body {
+        background: #0c0c18;
+    }
+}
+
+.app-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* Header */
+.header {
+    background: linear-gradient(135deg, #1a1a3a 0%, #0f0f2a 100%);
+    border-radius: 12px;
+    padding: 20px 30px;
+    margin-bottom: 20px;
+    border: 1px solid rgba(100, 100, 200, 0.3);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+.logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.logo-icon {
+    font-size: 32px;
+}
+
+.header h1 {
+    font-size: 24px;
+    color: #7c3aed;
+    letter-spacing: 2px;
+}
+
+.header-stats {
+    background: rgba(0, 0, 0, 0.4);
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-family: monospace;
+    color: #a78bfa;
+}
+
+/* Controls */
+.controls {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: inherit;
+    transition: all 0.2s;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #7c3aed, #a78bfa);
+    color: white;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 20px rgba(124, 58, 237, 0.4);
+}
+
+.search-box {
+    flex: 1;
+    min-width: 200px;
+    display: flex;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(124, 58, 237, 0.3);
+    border-radius: 8px;
+    padding: 0 12px;
+}
+
+.search-icon {
+    color: #a78bfa;
+    font-size: 16px;
+}
+
+.search-box input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    padding: 10px 12px;
+    color: white;
+    font-size: 14px;
+    outline: none;
+}
+
+.search-box input::placeholder {
+    color: #666;
+}
+
+.sort-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 5px 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(124, 58, 237, 0.3);
+}
+
+.sort-box label {
+    font-size: 13px;
+    color: #a78bfa;
+}
+
+.sort-box select {
+    background: transparent;
+    border: none;
+    color: white;
+    padding: 8px;
+    font-size: 13px;
+    cursor: pointer;
+    outline: none;
+}
+
+.sort-box select option {
+    background: #1a1a3a;
+}
+
+/* Loading */
+.loading {
+    text-align: center;
+    padding: 60px;
+}
+
+.spinner {
+    width: 50px;
+    height: 50px;
+    border: 3px solid rgba(124, 58, 237, 0.3);
+    border-top-color: #7c3aed;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 20px;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Inventory Container */
+.inventory-container {
+    background: rgba(15, 15, 30, 0.5);
+    border-radius: 12px;
+    overflow: auto;
+    max-height: calc(100vh - 250px);
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+}
+
+/* Table Styles */
+.inventory-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+
+.inventory-table thead {
+    position: sticky;
+    top: 0;
+    background: #0f0f2a;
+    z-index: 10;
+    transform: translateZ(0);
+}
+
+.inventory-table th {
+    text-align: left;
+    padding: 14px 12px;
+    color: #a78bfa;
+    font-weight: 600;
+    border-bottom: 2px solid #7c3aed;
+    font-size: 13px;
+}
+
+.inventory-table td {
+    padding: 12px;
+    border-bottom: 1px solid rgba(124, 58, 237, 0.1);
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.inventory-table tbody tr:hover {
+    background: rgba(124, 58, 237, 0.1);
+}
+
+.blacklisted-row {
+    opacity: 0.6;
+    background: rgba(220, 38, 38, 0.05);
+}
+
+/* Icon Column */
+.icon-cell {
+    width: 50px;
+    text-align: center;
+}
+
+.item-icon {
+    width: 36px;
+    height: 36px;
+    object-fit: contain;
+}
+
+.no-icon {
+    font-size: 24px;
+    display: inline-block;
+    width: 36px;
+    text-align: center;
+    opacity: 0.5;
+}
+
+/* Name Column */
+.name-cell {
+    font-weight: 500;
+    color: #e0e0e0;
+    max-width: 300px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Amount Column */
+.amount-cell {
+    width: 80px;
+    text-align: center;
+    color: #fbbf24;
+    font-weight: bold;
+}
+
+/* ID Column */
+.id-cell {
+    width: 120px;
+    font-family: monospace;
+    font-size: 12px;
+    color: #888;
+}
+
+/* Instance Column */
+.instance-cell {
+    width: 130px;
+    font-family: monospace;
+    font-size: 11px;
+    color: #666;
+}
+
+/* Category Column */
+.category-cell {
+    width: 100px;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+/* Error Message */
+.error-message {
+    background: rgba(220, 38, 38, 0.2);
+    border: 1px solid #ef4444;
+    border-radius: 8px;
+    padding: 15px;
+    margin-top: 20px;
+    text-align: center;
+    color: #ef4444;
+}
+
+/* Modal */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.95);
+    z-index: 1000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.modal-content {
+    background: linear-gradient(135deg, #1a1a3a, #0f0f2a);
+    border-radius: 16px;
+    max-width: 500px;
+    width: 90%;
+    border: 1px solid #7c3aed;
+    overflow: hidden;
+}
+
+.modal-header {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 20px;
+    background: rgba(124, 58, 237, 0.1);
+    border-bottom: 1px solid rgba(124, 58, 237, 0.3);
+}
+
+.modal-icon {
+    width: 48px;
+    height: 48px;
+    object-fit: contain;
+}
+
+.modal-icon-placeholder {
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 8px;
+}
+
+.modal-header h3 {
+    margin: 0;
+    color: #a78bfa;
+    font-size: 18px;
+}
+
+.modal-details {
+    padding: 20px;
+}
+
+.modal-details p {
+    margin: 10px 0;
+    font-size: 14px;
+}
+
+.modal-details strong {
+    color: #a78bfa;
+    min-width: 100px;
+    display: inline-block;
+}
+
+.close-modal {
+    float: right;
+    font-size: 24px;
+    cursor: pointer;
+    color: #888;
+    margin: 10px;
+}
+
+.close-modal:hover {
+    color: #a78bfa;
+}
+
+.close-btn {
+    margin: 20px;
+    width: calc(100% - 40px);
+}
+
+/* Responsive */
+@media (max-width: 896px) {
+    .app-container {
+        padding: 10px;
+    }
+
+    .header {
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .controls {
+        flex-direction: column;
+    }
+
+    .search-box, .sort-box, .btn {
+        width: 100%;
+    }
+
+    .id-cell, .instance-cell, .category-cell {
+        display: none;
+    }
+
+    .inventory-table th:nth-child(2),
+    .inventory-table .icon-cell {
+        display: none;
+    }
+
+    .name-cell {
+        max-width: 150px;
+    }
+
+    /* Less repaint work on phones/tablets */
+    .btn,
+    .btn-primary:hover,
+    .inventory-table td {
+        transition: background-color 0.15s ease, opacity 0.15s ease;
+    }
+
+    .btn-primary:hover {
+        transform: none;
+    }
+
+    .inventory-container {
+        max-height: calc(100vh - 220px);
+    }
+
+    .virtual-spacer td {
+        pointer-events: none;
+    }
+
+    .actions-cell {
+        width: 80px;
+    }
+
+    .btn-delete, .btn-sell {
+        padding: 2px 4px;
+        font-size: 10px;
+    }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #0f0f2a;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #7c3aed;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #a78bfa;
+}
+
+/* Action buttons */
+.actions-cell {
+    width: 120px;
+    text-align: center;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 5px;
+    justify-content: center;
+}
+
+.btn-delete, .btn-sell {
+    padding: 4px 8px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.2s;
+}
+
+.btn-delete {
+    background: rgba(220, 38, 38, 0.2);
+    color: #ef4444;
+    border: 1px solid #ef4444;
+}
+
+.btn-delete:hover {
+    background: #ef4444;
+    color: white;
+}
+
+.btn-sell {
+    background: rgba(34, 197, 94, 0.2);
+    color: #22c55e;
+    border: 1px solid #22c55e;
+}
+
+.btn-sell:hover {
+    background: #22c55e;
+    color: white;
+}
+
+/* Modal buttons */
+.modal-buttons {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.btn-danger {
+    background: #ef4444;
+    color: white;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    flex: 1;
+}
+
+.btn-success {
+    background: #22c55e;
+    color: white;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    flex: 1;
+}
+
+.btn-secondary {
+    background: #4b5563;
+    color: white;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    flex: 1;
+}
+
+.btn-small {
+    background: rgba(124, 58, 237, 0.3);
+    color: #a78bfa;
+    border: 1px solid #7c3aed;
+    border-radius: 4px;
+    padding: 4px 10px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.btn-small:hover {
+    background: #7c3aed;
+    color: white;
+}
+
+/* Amount selector in modal */
+.amount-selector {
+    margin: 15px 0;
+    text-align: center;
+}
+
+.amount-controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+    margin: 10px 0;
+}
+
+.amount-number {
+    font-size: 20px;
+    font-weight: bold;
+    min-width: 40px;
+    text-align: center;
+}
+
+.max-amount {
+    font-size: 11px;
+    color: #888;
+    margin-top: 5px;
+}
+
+/* Swap Mode Styles */
+.btn-swap-mode {
+    background: #fbbf24;
+    color: #1a1a3a;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s;
+}
+
+.btn-swap-mode:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(251, 191, 36, 0.3);
+}
+
+.btn-swap-mode.active {
+    background: #22c55e;
+    color: white;
+}
+
+.swap-selected {
+    background: rgba(34, 211, 238, 0.3) !important;
+    border-left: 3px solid #22d3ee;
+}
+
+.swap-pending {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: #1a1a3a;
+    padding: 12px 24px;
+    border-radius: 8px;
+    border-left: 4px solid #fbbf24;
+    border-top: 1px solid rgba(251, 191, 36, 0.3);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    z-index: 100;
+    font-weight: 500;
+    color: #fbbf24;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+    from { transform: translateY(100px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}

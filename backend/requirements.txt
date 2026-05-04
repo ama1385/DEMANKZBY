@@ -1,0 +1,4 @@
+# Proxy / local server
+requests>=2.28.0
+# Optional: faster TLS + parallel mutates (proxy falls back to urllib if missing)
+curl-cffi>=0.6.0

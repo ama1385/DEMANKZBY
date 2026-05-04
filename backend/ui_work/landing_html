@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DEMAN.SOTRE — Sign in</title>
+    <link rel="icon" type="image/png" href="/assets/deman.png?v=9">
+    <link rel="stylesheet" href="/landing.css?v=5">
+</head>
+<body>
+    <div class="landing-bg" aria-hidden="true">
+        <div class="landing-bg__grad"></div>
+        <div class="landing-bg__orb landing-bg__orb--1"></div>
+        <div class="landing-bg__orb landing-bg__orb--2"></div>
+        <div class="landing-bg__grid"></div>
+    </div>
+
+    <div class="landing-wrap">
+        <main class="landing-card landing-card--wide" role="main">
+            <div class="landing-card__hero">
+                <div class="landing-card__glow">
+                    <img src="/assets/deman.png?v=9" width="72" height="72" alt="" decoding="async" />
+                </div>
+                <p class="landing-card__kicker">Signature</p>
+                <h1 class="landing-card__brand">DEMAN.SOTRE</h1>
+                <p class="landing-card__slogan">V9</p>
+                <p class="landing-card__lead">
+                    Enter your license, then sign in with a platform or paste your access token. You will be redirected to the app when ready.
+                </p>
+            </div>
+
+
+            <!-- KeyAuth license -->
+            <div id="landKeyauthBlock" class="land-section hidden">
+                <label class="land-field">
+                    <span class="land-field__label">License key</span>
+                    <div class="land-field__box">
+                        <input type="text" id="landKeyauthInput" class="land-field__input" placeholder="Paste license key…" autocomplete="off" spellcheck="false" />
+                    </div>
+                </label>
+                <button type="button" id="landKeyauthSaveBtn" class="land-btn land-btn--primary">Save license</button>
+                <div id="landKeyauthError" class="land-err" role="alert"></div>
+            </div>
+
+            <!-- Platform + token -->
+            <div id="landAuthBlock" class="land-section hidden">
+                <h2 class="land-h2">Sign in with platform</h2>
+                <p class="land-hint land-hint--muted">Opens your browser (Settings → Browser in the app). Or paste a token below.</p>
+                <div class="auth-platform-grid" id="landAuthPlatformGrid" role="group" aria-label="Choose login platform">
+                    <button type="button" class="auth-platform-btn auth-platform-btn--steam" data-provider="steam" title="Steam">
+                        <span class="auth-platform-btn__ico"><img class="auth-platform-btn__ico-img" src="/assets/platforms/steam.svg?v=3" width="28" height="28" alt="" decoding="async" /></span>
+                        <span class="auth-platform-btn__main">Steam</span>
+                        <span class="auth-platform-btn__sub">Browser</span>
+                    </button>
+                    <button type="button" class="auth-platform-btn auth-platform-btn--epic" data-provider="epic" title="Epic Games">
+                        <span class="auth-platform-btn__ico"><img class="auth-platform-btn__ico-img" src="/assets/platforms/epicgames.svg?v=3" width="28" height="28" alt="" decoding="async" /></span>
+                        <span class="auth-platform-btn__main">Epic</span>
+                        <span class="auth-platform-btn__sub">Games</span>
+                    </button>
+                    <button type="button" class="auth-platform-btn auth-platform-btn--xbox" data-provider="xbox" title="Xbox">
+                        <span class="auth-platform-btn__ico"><img class="auth-platform-btn__ico-img" src="/assets/platforms/xbox.svg?v=3" width="28" height="28" alt="" decoding="async" /></span>
+                        <span class="auth-platform-btn__main">Xbox</span>
+                        <span class="auth-platform-btn__sub">Microsoft</span>
+                    </button>
+                    <button type="button" class="auth-platform-btn auth-platform-btn--ps" data-provider="playstation" title="PlayStation">
+                        <span class="auth-platform-btn__ico"><img class="auth-platform-btn__ico-img" src="/assets/platforms/playstation.svg?v=3" width="28" height="28" alt="" decoding="async" /></span>
+                        <span class="auth-platform-btn__main">PlayStation</span>
+                        <span class="auth-platform-btn__sub">PSN</span>
+                    </button>
+                </div>
+
+                <div id="landOauthHelp" class="token-oauth-help hidden">
+                    <p class="token-oauth-help__title">⚠ Microsoft blocked the login</p>
+                    <p class="token-oauth-help__body">Try another browser in Settings, sign in at login.live.com first, or paste a token below.</p>
+                </div>
+
+                <label class="land-field">
+                    <span class="land-field__label">Access token</span>
+                    <div class="land-field__box">
+                        <input type="password" id="landTokenInput" class="land-field__input" placeholder="Paste token (Bearer optional)…" autocomplete="off" spellcheck="false" />
+                        <button type="button" id="landTokenEye" class="land-eye" aria-label="Show / hide token" tabindex="-1">👁</button>
+                    </div>
+                </label>
+                <button type="button" id="landTokenSaveBtn" class="land-btn land-btn--primary">Save token &amp; continue</button>
+                <div id="landTokenError" class="land-err" role="alert"></div>
+            </div>
+
+            <p id="landRedirectMsg" class="land-redirect hidden" role="status">Opening app…</p>
+        </main>
+
+        <div id="landOauthModal" class="land-oauth-modal hidden" role="dialog" aria-modal="true" aria-labelledby="landOauthModalTitle">
+            <div class="land-oauth-modal__backdrop" data-close-oauth="1"></div>
+            <div class="land-oauth-modal__card">
+                <h3 id="landOauthModalTitle" class="land-oauth-modal__title">Complete sign-in</h3>
+                <p class="land-oauth-modal__step"><strong>1.</strong> <a id="landOauthOpenLink" href="#" target="_blank" rel="noopener">Click here to sign in</a></p>
+                <p class="land-oauth-modal__step"><strong>2.</strong> After signing in your browser may show an error — that&apos;s expected. Copy the <strong>full URL</strong> from the address bar and paste it below.</p>
+                <textarea id="landOauthUrlInput" class="land-oauth-modal__textarea" rows="3" placeholder="http://127.0.0.1:49172?code=..."></textarea>
+                <div class="land-oauth-modal__actions">
+                    <button type="button" id="landOauthSubmitBtn" class="land-btn land-btn--primary land-oauth-modal__btn">Submit URL</button>
+                    <button type="button" id="landOauthCancelBtn" class="land-btn land-btn--ghost land-oauth-modal__btn">Cancel</button>
+                </div>
+                <div id="landOauthModalErr" class="land-oauth-modal__err" role="alert"></div>
+            </div>
+        </div>
+
+        <footer class="landing-footer">© <span id="landingYear"></span> DEMAN.SOTRE — <span class="dev-by-deman">dev by DEMAN</span></footer>
+    </div>
+    <script src="/landing.js?v=5"></script>
+    <script>var el=document.getElementById('landingYear');if(el)el.textContent=new Date().getFullYear();</script>
+</body>
+</html>

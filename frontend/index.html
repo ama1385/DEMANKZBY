@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DEMAN.STORE</title>
+    <link rel="dns-prefetch" href="https://cdn.metaforge.app">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        /* Selected row highlight */
+        .row-selected {
+            background: rgba(124, 58, 237, 0.18) !important;
+            border-left: 3px solid #7c3aed;
+        }
+
+        /* Slide-up animation for floating bars */
+        @keyframes slideUp {
+            from { transform: translateY(60px) translateX(-50%); opacity: 0; }
+            to   { transform: translateY(0)    translateX(-50%); opacity: 1; }
+        }
+        #bulkProgressOverlay {
+            animation: none !important; /* uses its own positioning */
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="header">
+            <div class="logo">
+                <img src="/assets/deman.png" alt="DEMAN.STORE" style="width:42px;height:42px;object-fit:cover;border-radius:10px;">
+                <h1>DEMAN.STORE</h1>
+            </div>
+            <div class="header-stats" id="stats">Loading...</div>
+        </div>
+
+        <div class="controls">
+            <button id="refreshBtn" class="btn btn-primary">
+                <span class="btn-icon">🔄</span> Refresh
+            </button>
+            <div class="search-box">
+                <span class="search-icon">🔍</span>
+                <input type="text" id="searchInput" placeholder="Search by name or ID...">
+            </div>
+            <div class="sort-box">
+                <label>Sort by:</label>
+                <select id="sortBy">
+                    <option value="name">Name</option>
+                    <option value="amount">Amount</option>
+                    <option value="date">Date</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="loading" class="loading" style="display: none;">
+            <div class="spinner"></div>
+            <p>Loading inventory...</p>
+        </div>
+
+        <div id="inventoryGrid" class="inventory-container"></div>
+        <div id="errorMessage" class="error-message" style="display: none;"></div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
